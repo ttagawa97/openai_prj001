@@ -1,0 +1,101 @@
+schema_version: 1
+document:
+  id: DOC-API
+  title: API仕様
+  status: 確定
+
+common:
+  - id: API-001
+    status: 確定
+    title: 共通API規約
+    specification:
+      base_path: /api
+      protocol: HTTP
+      media_type: application/json
+      bind_scope: localhostのみ
+      validation: FastifyのJSON Schemaで入力・出力を検証
+      cors: 同一オリジンを原則とし、開発時は明示したlocalhostのフロントエンドオリジンのみ許可
+      success_body: エンドポイントごとに定義
+      error_body:
+        type: object
+        required: [error]
+        properties:
+          error:
+            type: object
+            required: [code, message]
+            properties:
+              code: {type: string}
+              message: {type: string}
+      unknown_route: {status: 404, code: NOT_FOUND}
+      invalid_request: {status: 400, code: VALIDATION_ERROR}
+      internal_error: {status: 500, code: INTERNAL_ERROR}
+    related_ids: [INF-002, INF-005]
+
+endpoints:
+  - id: API-002
+    status: 確定
+    method: POST
+    path: /api/scores
+    purpose: プレイ終了時のスコア登録
+    request:
+      type: object
+      additionalProperties: false
+      required: [score, reachedStage, outcome]
+      properties:
+        score: {type: integer, minimum: 0, maximum: 2147483647}
+        reachedStage: {type: integer, minimum: 1, maximum: 5}
+        outcome: {type: string, enum: [game_over, game_clear]}
+    response:
+      status: 201
+      body:
+        id: UUID
+        score: integer
+        reachedStage: integer
+        outcome: game_over | game_clear
+        recordedAt: ISO-8601 date-time
+    errors: [400, 500]
+    notes:
+      - 認証およびプレイヤー識別は行わない
+      - クライアント申告スコアを保存し、競技用途の改ざん防止は対象外とする
+    decision_reason: localhost上の1クライアント開発用途であり、要件に認証や不正対策がないため最小構成とする。
+    related_ids: [DAT-001, UI-006]
+
+  - id: API-003
+    status: 確定
+    method: GET
+    path: /api/scores
+    purpose: スコアランキング取得
+    request:
+      query:
+        limit: {type: integer, minimum: 1, maximum: 100, default: 10}
+    response:
+      status: 200
+      body:
+        scores:
+          type: array
+          ordering: スコア降順、同点は登録順昇順
+          items:
+            rank: integer
+            score: integer
+            reachedStage: integer
+            outcome: game_over | game_clear
+            recordedAt: ISO-8601 date-time
+    errors: [400, 500]
+    related_ids: [DAT-001, DAT-002, UI-005]
+
+  - id: API-004
+    status: 確定
+    method: GET
+    path: /api/health
+    purpose: 開発環境でのサーバー起動確認
+    response:
+      status: 200
+      body: {status: ok}
+    related_ids: [INF-007]
+
+external_apis:
+  - id: API-005
+    status: 確定
+    specification: 外部APIへの通信は行わない
+
+open_issues: []

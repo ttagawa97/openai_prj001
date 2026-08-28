@@ -1,0 +1,71 @@
+schema_version: 1
+document:
+  id: DOC-DATA
+  title: データ仕様
+  status: 確定
+
+data_entities:
+  - id: DAT-001
+    status: 確定
+    name: ScoreRecord
+    persistence: バックエンドプロセスのメモリのみ
+    fields:
+      id: {type: string, format: UUID, required: true, server_generated: true}
+      score: {type: integer, minimum: 0, maximum: 2147483647, required: true}
+      reached_stage: {type: integer, minimum: 1, maximum: 5, required: true}
+      outcome: {type: string, enum: [game_over, game_clear], required: true}
+      recorded_at: {type: string, format: ISO-8601 date-time, required: true, server_generated: true}
+      sequence: {type: integer, minimum: 1, required: true, server_generated: true}
+    behavior:
+      - プレイヤー名は保持しない
+      - 同じクライアントからの複数回の記録を個別に保持する
+      - 同一サーバープロセスへ接続した全クライアントで共有する
+      - プロセス終了時に全件消去され、暦日ではリセットしない
+    related_ids: [OVR-007, API-002, API-003]
+
+  - id: DAT-002
+    status: 確定
+    name: RankingView
+    persistence: なし（ScoreRecordから都度生成）
+    ordering:
+      - score: descending
+      - sequence: ascending
+    display_limit: 10
+    decision_reason: 同点は先に記録された結果を上位とし、画面に収まる標準的な上位10件を表示する。
+    related_ids: [DAT-001, UI-003, API-003]
+
+  - id: DAT-003
+    status: 確定
+    name: GameSessionState
+    persistence: フロントエンドメモリのみ
+    fields:
+      score: {type: integer, initial: 0}
+      lives: {type: integer, initial: 3}
+      current_stage: {type: integer, initial: 1}
+      checkpoint_id: {type: string, initial: stage-1-start}
+      player_state: {type: string, enum: [playing, respawning, game_over, game_clear]}
+      boss_state: {type: string, enum: [none, active, defeated, retreated]}
+    lifecycle: 新規ゲーム開始時に生成し、タイトルへ戻った後は破棄する
+    related_ids: [OVR-006, UI-004]
+
+  - id: DAT-004
+    status: 確定
+    name: StageDefinition
+    persistence: フロントエンドの静的アセット
+    fields:
+      stage_id: {type: integer, minimum: 1, maximum: 5}
+      map_segments: {type: array, description: 背景・地形・地上敵配置}
+      enemy_waves: {type: array, description: 空中敵出現時刻・位置・編成}
+      checkpoints: {type: array, description: 再開可能なスクロール位置}
+      boss: {type: object, description: ボス構成、制限時間、攻撃パターン、撃破点}
+      difficulty: {type: object, description: 速度、耐久力、発射間隔等の係数}
+    validation: 起動時またはテスト時に全ステージの必須項目と参照整合性を検証する
+    related_ids: [OVR-004, OVR-008]
+
+migration:
+  - id: DAT-005
+    status: 確定
+    specification: 永続化データが存在しないため、初期構築時のデータ移行は不要
+    backward_compatibility: 対象なし
+
+open_issues: []

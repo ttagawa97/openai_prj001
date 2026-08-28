@@ -1,0 +1,120 @@
+schema_version: 1
+document:
+  id: DOC-INFRA
+  title: インフラ・環境仕様
+  status: 確定
+
+environment:
+  - id: INF-001
+    status: 確定
+    title: 環境種別
+    specification:
+      provisioned: [development]
+      not_in_scope: [test専用環境, staging, production]
+      host_requirements:
+        - Node.js Active LTS
+        - npm（採用Node.jsに同梱される対応版）
+        - PC版Google Chrome最新版
+    related_ids: [OVR-002]
+
+  - id: INF-002
+    status: 確定
+    title: ネットワーク公開範囲
+    specification:
+      frontend_bind: 127.0.0.1
+      backend_bind: 127.0.0.1
+      external_exposure: false
+      lan_exposure: false
+      expected_clients_per_server: 1
+    verification: 起動時に待受アドレスをログ出力し、localhost以外で待ち受けていないことを確認する
+    related_ids: [OVR-002, API-001]
+
+architecture:
+  - id: INF-003
+    status: 確定
+    title: ソース構成
+    specification:
+      root: npm workspaces
+      workspaces:
+        frontend: フロントエンドゲーム
+        backend: スコアAPI
+        shared: API型・共有スキーマ（必要な場合）
+      frontend_stack: [Vite, TypeScript, Phaser 3]
+      backend_stack: [Node.js Active LTS, Fastify, TypeScript]
+    related_ids: [OVR-003]
+
+  - id: INF-004
+    status: 確定
+    title: コンテナ方針
+    specification:
+      required: true
+      frontend_container: 独立コンテナとし、起動時に開発用フロントエンドサービスを自動起動
+      backend_container: 独立コンテナとし、起動時にバックエンドサービスを自動起動
+      orchestration: Docker Compose
+      port_binding: すべて127.0.0.1へ明示的にバインド
+      base_image: 公式Node.js Active LTS slim系イメージ
+    decision_reason: プロジェクト構築ルールに従いフロントエンドとバックエンドを分離し、再現可能な開発環境を提供する。
+
+security_and_operations:
+  - id: INF-005
+    status: 確定
+    title: 開発環境の基本保護
+    specification:
+      - localhost以外へサービスを公開しない
+      - API入力をスキーマ検証し、未知フィールドを拒否する
+      - エラーレスポンスへスタックトレースや内部パスを含めない
+      - 秘密情報および外部認証情報を使用しない
+      - 依存関係はロックファイルで固定し、無料ライセンスのパッケージのみ使用する
+    related_ids: [API-001]
+
+  - id: INF-006
+    status: 確定
+    title: 性能対策
+    specification:
+      target: 対象PC版Chromeで通常プレイ中60FPS
+      measures:
+        - Phaserのオブジェクトプールを弾・敵・爆発へ適用
+        - 画面外オブジェクトを停止または回収
+        - 毎フレームの不要なオブジェクト生成を避ける
+        - 静的アセットを事前ロードする
+      verification: 開発者ツールまたはゲーム内計測で代表ステージおよびボス戦を確認する
+    related_ids: [OVR-010, UI-001]
+
+  - id: INF-007
+    status: 確定
+    title: ログと起動確認
+    specification:
+      backend_logs: 起動、終了、APIエラー、予期しない例外を標準出力へ構造化ログとして出力
+      frontend_logs: 起動不能なアセット/APIエラーをブラウザコンソールへ出力し、必要箇所は画面表示
+      health_check: GET /api/healthを使用
+      score_logging: スコア値は記録可能だが個人情報は存在しない
+    related_ids: [API-004]
+
+execution:
+  - id: INF-008
+    status: 確定
+    title: 開発環境起動
+    specification:
+      script_path: execute/development.sh
+      behavior: Docker Composeを使用してフロントエンド・バックエンドを起動する
+      generation_timing: 環境構築時に生成する（仕様生成時点では生成しない）
+      automatic_services: 各コンテナ起動時に対応サービスを自動起動する
+
+testing:
+  - id: INF-009
+    status: 確定
+    title: 検証方針
+    specification:
+      unit_and_integration: Vitest
+      e2e: Playwright
+      static_checks: [TypeScript型検査, ESLint, Prettier検査]
+      required_coverage:
+        - 移動、空中攻撃、地上攻撃の命中対象分離
+        - 残機、チェックポイント再開、スコア維持
+        - ボス撃破・撤退・第5ステージ完了
+        - スコア登録、順位、プロセス再起動時の消去
+        - タイトル、ランキング、終了画面の遷移
+        - localhost限定の待受設定
+    related_ids: [OVR-011]
+
+open_issues: []

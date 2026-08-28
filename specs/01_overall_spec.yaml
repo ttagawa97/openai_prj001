@@ -1,0 +1,129 @@
+schema_version: 1
+document:
+  id: DOC-OVERALL
+  title: システム全体仕様
+  status: 確定
+  source: requirements/spec.txt
+
+system:
+  - id: OVR-001
+    status: 確定
+    title: 目的
+    specification: >-
+      PC向けGoogle Chromeで動作する、オリジナルの縦スクロールシューティングゲームを提供する。
+      古典的な空中攻撃・地上攻撃型ゲームを参考にするが、固有名称、画像、音源、マップ等は複製しない。
+
+  - id: OVR-002
+    status: 確定
+    title: 対象環境
+    specification:
+      environments: [開発環境]
+      supported_client: PC版Google Chrome最新版
+      unsupported_clients: [スマートフォン, タブレット, Google Chrome以外のブラウザ]
+      concurrency_assumption: 1サーバーにつき1クライアント
+    related_ids: [INF-001, INF-002]
+
+  - id: OVR-003
+    status: 確定
+    title: システム構成
+    specification:
+      repository: npm workspacesによるモノレポ
+      frontend: Vite + TypeScript + Phaser 3
+      backend: Node.js Active LTS + Fastify + TypeScript
+      communication: localhost上のHTTP REST API
+      persistence: なし（スコアはバックエンドプロセスのメモリのみ）
+    decision_reason: >-
+      現環境にNode.jsとnpmがあり、Phaser 3との親和性、開発サーバーの簡潔さ、型共有、
+      小規模なローカルAPIの実装効率を考慮した。Fastifyは軽量で入力検証を組み込みやすい。
+    related_ids: [DAT-001, API-001, INF-003]
+
+  - id: OVR-004
+    status: 確定
+    title: ゲーム進行
+    specification:
+      stage_count: 5
+      scrolling: ステージ間をシームレスに縦スクロールする
+      boss_encounter: 各ステージ終端でスクロールを停止してボス戦へ移行する
+      boss_resolution:
+        defeated: 撃破スコアを加算して次ステージへ進む
+        timeout: ボスは撤退し、撃破スコアを加算せず次ステージへ進む
+      ending: 第5ステージのボス撃破または撤退後にゲームクリアを表示し、タイトル画面へ戻る
+    related_ids: [UI-004, UI-005]
+
+  - id: OVR-005
+    status: 確定
+    title: 操作と攻撃
+    specification:
+      movement: カーソルキーで上下左右および斜め移動
+      air_attack: Zキーで前方へ弾を発射し、空中敵のみ攻撃
+      ground_attack: Xキーで自機前方の照準位置へ爆弾を投下し、着弾範囲内の地上敵のみ攻撃
+      simultaneous_keys: 移動キーと攻撃キー、および互いに矛盾しない移動キーの同時入力を許可
+    related_ids: [UI-004]
+
+  - id: OVR-006
+    status: 確定
+    title: 残機・ミス・ゲームオーバー
+    specification:
+      initial_lives: 3
+      score_based_extra_lives: false
+      on_player_destroyed: 残機を1減らす
+      restart: 残機が残っていれば直前に通過したチェックポイントから再開
+      retained_on_restart: [スコア, 到達ステージ]
+      game_over: 残機をすべて失った時点でゲームオーバー
+    related_ids: [DAT-003, UI-006]
+
+  - id: OVR-007
+    status: 確定
+    title: 敵と得点
+    specification:
+      enemy_classes:
+        - 空中敵（移動し、敵弾を発射可能）
+        - 地上敵（原則マップ固定、一部は低速移動し、敵弾を発射可能）
+      scoring: 敵の撃破時に敵種別ごとのスコアを加算
+      ranking_submission: ゲームオーバーまたはゲームクリア時に最終スコアを1件登録
+    decision_reason: ランキング登録時点が要件に明記されていないため、一般的なゲーム動作としてプレイ終了時に確定する。
+    related_ids: [DAT-001, API-002]
+
+  - id: OVR-008
+    status: 確定
+    title: ステージ設計方針
+    specification:
+      originality: マップ、敵編成、ボス、名称、画像、音源を新規に設計する
+      difficulty_curve: ステージ進行に伴い敵数、速度、耐久力、弾幕密度を段階的に上げる
+      fairness: 初見で回避不能な出現・攻撃を避け、出現予告または反応可能時間を確保する
+      checkpoints: 各ステージに複数配置し、ボス開始地点を必ずチェックポイントとする
+    decision_reason: 要件でAIに委任されたステージ・難易度設計を、実装およびテスト可能な共通原則として具体化した。
+
+  - id: OVR-009
+    status: 確定
+    title: 音響・知的財産
+    specification:
+      audio: BGMと効果音を提供する
+      allowed_assets: [プロジェクト用に新規作成したオリジナル素材, ライセンス条件を満たす無料素材]
+      prohibited_assets: 第三者の権利を侵害する素材
+      attribution: ライセンスが表示を要求する場合はリポジトリ内に帰属表示を含める
+
+  - id: OVR-010
+    status: 確定
+    title: 性能・表示
+    specification:
+      target_fps: 60
+      logical_resolution: 540x960
+      orientation: 縦長
+      scaling: 表示領域内で縦横比を維持して拡大縮小
+      letterbox_color: "#000000"
+    decision_reason: 9:16の縦長比率で、PC上の描画負荷とゲームオブジェクトの配置精度を両立する解像度として選定した。
+    related_ids: [UI-001, INF-006]
+
+  - id: OVR-011
+    status: 確定
+    title: 品質保証ツール
+    specification:
+      unit_test: Vitest
+      browser_e2e: Playwright
+      lint: ESLint
+      formatting: Prettier
+      type_check: TypeScript compiler
+    decision_reason: TypeScript/Viteとの統合性と、対象ブラウザ相当環境での自動操作検証を考慮した。
+
+open_issues: []

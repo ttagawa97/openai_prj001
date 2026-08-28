@@ -1,0 +1,122 @@
+schema_version: 1
+document:
+  id: DOC-UI
+  title: UI仕様
+  status: 確定
+
+common:
+  - id: UI-001
+    status: 確定
+    title: ゲームキャンバス
+    specification:
+      logical_size: {width: 540, height: 960}
+      scale_mode: FIT
+      auto_center: CENTER_BOTH
+      background_and_margin: "#000000"
+      rendering: Phaser 3 Canvas/WebGL自動選択
+      target_fps: 60
+    related_ids: [OVR-010]
+
+  - id: UI-002
+    status: 確定
+    title: 共通視覚・操作規定
+    specification:
+      language: 日本語
+      font: 標準のサンセリフ系フォント（外部フォント通信なし）
+      palette:
+        background: "#08111F"
+        primary_text: "#F4F7FF"
+        accent: "#48D7FF"
+        warning: "#FFCC33"
+        danger: "#FF4D5A"
+      menu_navigation: カーソル上下キーで選択、ZキーまたはEnterキーで決定
+      focus_indicator: 選択項目をアクセント色とカーソルで明示
+    decision_reason: キーボードのみで一貫して操作でき、ゲーム画面上で十分なコントラストを得る標準設計とした。
+
+screens:
+  - id: UI-003
+    status: 確定
+    name: タイトル画面
+    layout:
+      top: オリジナルのゲームタイトル
+      center: [ゲーム開始, スコア表示, 終了]
+      bottom: 操作説明（カーソル移動、Z空中攻撃、X地上攻撃）
+    actions:
+      ゲーム開始: 新規GameSessionStateを生成しゲーム画面へ遷移
+      スコア表示: ランキング画面へ遷移
+      終了: 終了画面へ遷移
+    related_ids: [DAT-003]
+
+  - id: UI-004
+    status: 確定
+    name: ゲーム画面
+    layout:
+      playfield: 画面全体
+      hud_top:
+        left: SCORE
+        center: STAGE
+        right: 残機数
+      ground_target: 自機前方に地上攻撃照準を常時表示
+      boss_hud: ボス戦中のみ画面上部にボス耐久ゲージと残り時間を表示
+    controls:
+      ArrowUp: 上移動
+      ArrowDown: 下移動
+      ArrowLeft: 左移動
+      ArrowRight: 右移動
+      KeyZ: 空中攻撃
+      KeyX: 地上攻撃
+    behavior:
+      - 自機を画面外へ移動させない
+      - キー押下継続で移動と空中攻撃を継続する
+      - 地上攻撃は投下間隔を設け、照準・投下・着弾範囲を視覚表示する
+      - ボス出現時はスクロールを停止し、撃破または時間切れまでボス戦を継続する
+      - 一時停止機能は初期範囲に含めない
+    related_ids: [OVR-004, OVR-005, DAT-003]
+
+  - id: UI-005
+    status: 確定
+    name: スコアランキング画面
+    layout:
+      top: SCORE RANKING
+      center: 順位とスコアの上位10件
+      bottom: 戻る操作案内
+    behavior:
+      - APIから取得した順位順に表示する
+      - 記録がない場合は「記録なし」と表示する
+      - Zキー、Enterキー、またはEscapeキーでタイトル画面へ戻る
+      - APIエラー時は取得失敗を表示し、タイトルへ戻れる状態を維持する
+    related_ids: [DAT-002, API-003]
+
+  - id: UI-006
+    status: 確定
+    name: プレイ終了表示
+    variants:
+      game_over: GAME OVERと最終スコアを表示
+      game_clear: GAME CLEARと最終スコアを表示
+    behavior:
+      - 最終スコアをAPIへ1回だけ登録する
+      - 登録成功または失敗表示後、ZキーまたはEnterキーでタイトル画面へ戻る
+      - ゲームクリア時は短い演出後に操作受付を開始する
+    related_ids: [OVR-006, OVR-007, API-002]
+
+  - id: UI-007
+    status: 確定
+    name: 終了画面
+    specification:
+      appearance: キャンバス全体を黒で覆う
+      behavior: キーボードおよびポインター入力を以後受け付けない
+      recovery: ページ再読み込みのみでタイトル画面へ戻る
+    decision_reason: ブラウザからタブを閉じる処理は制限されるため、要件どおりアプリ内操作を無効化する。
+
+transitions:
+  - id: UI-008
+    status: 確定
+    routes:
+      - タイトル画面 -> ゲーム画面: ゲーム開始
+      - タイトル画面 -> スコアランキング画面: スコア表示
+      - タイトル画面 -> 終了画面: 終了
+      - ゲーム画面 -> プレイ終了表示: ゲームオーバーまたはゲームクリア
+      - プレイ終了表示 -> タイトル画面: 確認入力
+      - スコアランキング画面 -> タイトル画面: 戻る入力
+
+open_issues: []
