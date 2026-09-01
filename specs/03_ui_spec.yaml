@@ -32,6 +32,11 @@ common:
       menu_navigation: カーソル上下キーで選択、ZキーまたはEnterキーで決定
       focus_indicator: 選択項目をアクセント色とカーソルで明示
     decision_reason: キーボードのみで一貫して操作でき、ゲーム画面上で十分なコントラストを得る標準設計とした。
+    asset_implementation:
+      graphics: Phaserのプリミティブ図形から実行時生成するオリジナル描画
+      audio: Web Audio APIで実行時生成するオリジナルの合成BGM・効果音
+      external_assets: 使用しない
+      decision_reason: 第三者素材の権利・帰属表示を不要にし、外部通信なしで動作させるため。
 
 screens:
   - id: UI-003
@@ -56,7 +61,22 @@ screens:
         left: SCORE
         center: STAGE
         right: 残機数
-      ground_target: 自機前方に地上攻撃照準を常時表示
+      ground_target:
+        shape: 円と直交する水平線・垂直線で構成するクロスヘア
+        position: 自機前方210pxの地上攻撃着弾予定点
+        behavior: ゲームプレイ中は常時表示して自機の移動に追従し、画面上端では見切れない位置に制限する
+        color: "#7CFF6B"
+        impact_lock: 爆弾投下後は、投下時に確定した着弾点にも着弾まで照準を表示する
+        decision_reason: 地上攻撃の現在の着弾予定点と、投下済み爆弾の着弾点を明確に区別して把握できるようにするため。
+      enemy_identification:
+        air_enemy:
+          shape: 前進翼と尖った機首を持つ航空機シルエット
+          primary_color: "#FF4D5A"
+        ground_enemy:
+          shape: 左右の履帯、矩形の車体、円形砲塔、砲身を持つ戦車シルエット
+          primary_color: "#FFCC33"
+        rule: 色だけに依存せず、シルエットのみでも空中敵と地上敵を識別可能にする
+        decision_reason: プレイヤーが使用すべき攻撃種別を敵の外観から即座に判断できるようにするため。
       boss_hud: ボス戦中のみ画面上部にボス耐久ゲージと残り時間を表示
     controls:
       ArrowUp: 上移動
@@ -69,6 +89,7 @@ screens:
       - 自機を画面外へ移動させない
       - キー押下継続で移動と空中攻撃を継続する
       - 地上攻撃は投下間隔を設け、照準・投下・着弾範囲を視覚表示する
+      - ZキーとXキーの同時押下時は、空中攻撃と地上攻撃を独立して同時に発射する
       - ボス出現時はスクロールを停止し、撃破または時間切れまでボス戦を継続する
       - 一時停止機能は初期範囲に含めない
     related_ids: [OVR-004, OVR-005, DAT-003]

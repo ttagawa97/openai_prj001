@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: 3000
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - ./backend/src:/app/backend/src:ro
+      - ./shared/src:/app/shared/src:ro
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - backend
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:3000
+    ports:
+      - '127.0.0.1:5173:5173'
+    volumes:
+      - ./frontend/src:/app/frontend/src:ro
+      - ./frontend/index.html:/app/frontend/index.html:ro
+      - ./frontend/vite.config.ts:/app/frontend/vite.config.ts:ro
+    restart: unless-stopped

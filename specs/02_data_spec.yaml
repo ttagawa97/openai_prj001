@@ -60,6 +60,11 @@ data_entities:
       boss: {type: object, description: ボス構成、制限時間、攻撃パターン、撃破点}
       difficulty: {type: object, description: 速度、耐久力、発射間隔等の係数}
     validation: 起動時またはテスト時に全ステージの必須項目と参照整合性を検証する
+    implementation:
+      stage_names: [暁の湾岸, 翠風渓谷, 雲海要塞, 黄昏火山帯, 星環中枢]
+      checkpoint_policy: 各ステージの開始、道中2地点、ボス開始地点に配置する
+      boss_timeout_seconds: [35, 35, 40, 40, 45]
+    decision_reason: 難易度を段階的に上げつつ、再開区間が長くなりすぎない構成として具体化した。
     related_ids: [OVR-004, OVR-008]
 
 migration:

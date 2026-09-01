@@ -1,0 +1,5 @@
+AGENTS.md
+specs/
+node_modules/
+dist/
+coverage/

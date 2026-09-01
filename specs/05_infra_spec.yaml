@@ -99,6 +99,13 @@ execution:
       behavior: Docker Composeを使用してフロントエンド・バックエンドを起動する
       generation_timing: 環境構築時に生成する（仕様生成時点では生成しない）
       automatic_services: 各コンテナ起動時に対応サービスを自動起動する
+      compose_path: compose.yaml
+      host_port_bindings:
+        frontend: "127.0.0.1:5173"
+        backend: "127.0.0.1:3000"
+      container_internal_bind: コンテナ間・ポート転送を可能にするため各コンテナ内では0.0.0.0で待ち受ける
+      container_internal_api_endpoint: フロントエンドのViteプロキシからhttp://backend:3000へ接続する
+      decision_reason: ホスト側はlocalhost限定を維持しつつ、Dockerのポート転送を成立させるため。
 
 testing:
   - id: INF-009
