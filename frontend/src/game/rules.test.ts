@@ -40,4 +40,14 @@ describe('game rules', () => {
     expect(resolveBoss(session, true)).toBe('game_clear');
   });
   it('validates all static stages', () => expect(validateStages(stages)).toEqual([]));
+  it('paces air-enemy fire below boss fire while increasing difficulty by stage', () => {
+    stages.forEach((stage) => {
+      expect(stage.airBulletInterval).toBeGreaterThan(stage.boss.bulletInterval);
+    });
+    expect(stages.map((stage) => stage.airBulletInterval)).toEqual([2800, 2500, 2200, 1900, 1600]);
+    expect(stages.map((stage) => stage.boss.bulletInterval)).toEqual([850, 750, 650, 550, 450]);
+  });
+  it('keeps normal enemy durability at one in every stage', () => {
+    expect(stages.map((stage) => stage.enemyHp)).toEqual([1, 1, 1, 1, 1]);
+  });
 });

@@ -56,9 +56,17 @@ system:
     specification:
       movement: カーソルキーで上下左右および斜め移動
       air_attack: Zキーで前方へ弾を発射し、空中敵のみ攻撃
-      ground_attack: Xキーで自機前方の照準位置へ爆弾を投下し、着弾範囲内の地上敵のみ攻撃
+      ground_attack: Xキーでロックオン済みの地上敵すべてへ誘導レーザーを同時発射し、各対象への着弾時に攻撃する
+      ground_lock_on:
+        acquisition: 自機前方の照準が地上敵へ重なった時点で自動取得する
+        maximum_targets: 3
+        retention: 発射、対象撃破、対象の画面外離脱、チェックポイント復帰、ボス戦開始まで保持する
+        duplicate_targets: 同一対象は重複して取得しない
+        fire_without_lock: 発射しない
+      guided_laser: 自機から対象へ直線ではなく湾曲した誘導レーザー軌道を描き、到達時点で対象が有効な場合に命中させる
       simultaneous_keys: 移動キーと攻撃キー、および互いに矛盾しない移動キーの同時入力を許可
-    related_ids: [UI-004]
+    decision_reason: 人間の指示により、従来の照準地点への爆弾投下を、最大3体を捕捉して一斉攻撃できる誘導レーザーへ置き換えた。保持解除条件とロックなしの動作は重複攻撃や空撃ちを避ける標準動作として補完した。
+    related_ids: [DAT-012, UI-004]
 
   - id: OVR-006
     status: 確定
@@ -66,7 +74,7 @@ system:
     specification:
       initial_lives: 3
       score_based_extra_lives: false
-      on_player_destroyed: 残機を1減らす
+      on_player_destroyed: 自機専用の爆発演出を開始して残機を1減らす
       restart: 残機が残っていれば直前に通過したチェックポイントから再開
       retained_on_restart: [スコア, 到達ステージ]
       game_over: 残機をすべて失った時点でゲームオーバー
@@ -89,7 +97,8 @@ system:
     title: ステージ設計方針
     specification:
       originality: マップ、敵編成、ボス、名称、画像、音源を新規に設計する
-      difficulty_curve: ステージ進行に伴い敵数、速度、耐久力、弾幕密度を段階的に上げる
+      difficulty_curve: 通常敵の耐久力は1に固定し、ステージ進行に伴い敵数、移動速度、編成、弾幕密度を段階的に上げる
+      firing_balance: 通常の空中敵は序盤から過密に発射せず、ボスは同ステージの空中敵より高頻度で発射する
       fairness: 初見で回避不能な出現・攻撃を避け、出現予告または反応可能時間を確保する
       checkpoints: 各ステージに複数配置し、ボス開始地点を必ずチェックポイントとする
     decision_reason: 要件でAIに委任されたステージ・難易度設計を、実装およびテスト可能な共通原則として具体化した。
@@ -125,5 +134,160 @@ system:
       formatting: Prettier
       type_check: TypeScript compiler
     decision_reason: TypeScript/Viteとの統合性と、対象ブラウザ相当環境での自動操作検証を考慮した。
+
+  - id: OVR-012
+    status: 確定
+    title: 空地連携戦闘システム
+    specification:
+      chain_window_ms: 4000
+      chain_rule: 空中敵と地上敵を制限時間内に交互に撃破すると連携数を維持し、同種別の連続撃破または時間切れで連携数を1に戻す
+      score_multiplier:
+        range: 1倍から5倍
+        rule: 連携2回ごとに1段階上昇し、撃破得点に適用する
+      sync_gauge:
+        range: 0から100
+        first_or_same_target_gain: 10
+        alternating_target_gain: 25
+      sync_burst:
+        activation: ゲージ100時にCキー
+        effects: [画面上の敵弾をすべて消去, 4秒間の空中攻撃と地上攻撃の発射間隔半減]
+        gauge_consumption: 100
+      reset: 新規ゲーム開始時に連携数、倍率、ゲージ、強化時間を初期化する
+    decision_reason: 空中攻撃と地上攻撃の使い分けを攻略、得点、危機回避に接続し、本作固有の繰り返し遊べる戦闘ループとするため。
+    related_ids: [OVR-005, OVR-007, DAT-003, UI-004]
+
+  - id: OVR-013
+    status: 確定
+    title: ステージ自動生成とタイムライン再生
+    specification:
+      generation: ステージ定義と固定シードから、敵編隊、出現時刻、出現位置、移動経路、チェックポイント、ボス開始をAI設計ルールで自動生成する
+      determinism: 同じステージ定義とシードからは常に同じタイムラインを生成する
+      runtime_randomness: 敵編成、出現位置、出現時刻の決定にMath.randomを使用しない
+      ordering: イベントを発生時刻と一意なイベントIDの順に再生する
+      checkpoint_resume: チェックポイント復帰時は、該当時刻以降のイベントから再生を再開する
+      generated_content_scope: フェーズ2では既存の空中敵と地上敵による基本編隊を生成し、敵種と攻撃パターンは後続フェーズで拡張する
+    decision_reason: 攻略、バランス調整、自動テスト、将来の入力リプレイを成立させつつ、AIがステージ構成を継続的に生成できる基盤とするため。
+    related_ids: [OVR-004, OVR-008, DAT-004, DAT-006, UI-004]
+
+  - id: OVR-014
+    status: 確定
+    title: 通常敵と弾幕ライブラリ
+    specification:
+      enemy_archetypes:
+        air:
+          - {id: air-scout, role: 基本的な狙い弾で回避を教える偵察機}
+          - {id: air-interceptor, role: 高速移動と3方向弾で横移動を促す迎撃機}
+          - {id: air-gunship, role: 低速の全周弾で空間を制限する重攻撃機}
+        ground:
+          - {id: ground-tank, role: 基本的な狙い弾を放つ戦車}
+          - {id: ground-flak, role: 5方向弾で広範囲を制圧する対空戦車}
+          - {id: ground-turret, role: 予告後に扇状弾を放つ固定砲台}
+      bullet_patterns:
+        - {id: aimed, behavior: 発射時の自機位置へ単発}
+        - {id: fan-3, behavior: 自機方向を中心に3方向}
+        - {id: fan-5, behavior: 自機方向を中心に5方向}
+        - {id: radial-8, behavior: 45度間隔の全周弾}
+        - {id: cross-4, behavior: 90度間隔の交差弾}
+        - {id: telegraphed-fan-3, behavior: 照準線を450ms表示後、固定した方向へ3方向弾}
+      progression:
+        stage_1: [air-scout, ground-tank]
+        stage_2: [air-scout, air-interceptor, ground-tank, ground-flak]
+        stage_3_to_5: [air-scout, air-interceptor, air-gunship, ground-tank, ground-flak, ground-turret]
+      fairness:
+        - 弾幕密度だけでなく、敵の役割、発射間隔、移動速度を分離して難易度を調整する
+        - 高密度弾幕を放つ敵は通常の狙い弾より発射間隔を長くする
+        - 遅延攻撃は発射方向を予告時点で固定し、予告後に自機を再追尾しない
+    decision_reason: 単発狙い弾の頻度だけではなく、見て役割を判断し、攻撃を学習して回避できる攻略性を作るため。
+    related_ids: [OVR-008, OVR-013, DAT-004, DAT-006, DAT-007, UI-004]
+
+  - id: OVR-015
+    status: 確定
+    title: ステージ1構成
+    specification:
+      name: 暁の湾岸
+      narrative_arc:
+        - {section: 導入, purpose: 少数の空中敵と地上敵で攻撃の使い分けを確認する}
+        - {section: 展開, purpose: 交差する空中編隊と沿岸の地上敵で移動と空地連携を促す}
+        - {section: 中ボス, purpose: 湾岸哨戒艇アルバと護衛機による短い山場を作る}
+        - {section: 終盤, purpose: 両岸の地上敵と複数の空中編隊を交互に配置してボス前の総合区間とする}
+      map_theme: 夜明けの港湾から防波堤、貨物泊地、朝日の水路へ進む
+      generation: ステージ1は固定イベント構成とし、同一入力で常に同じ攻略順序を再生する
+    decision_reason: 初回ステージで操作学習、空地連携の発見、短い中間目標、最終ボス前の習熟確認を順に成立させるため。
+    related_ids: [OVR-008, OVR-013, DAT-008, UI-009]
+
+  - id: OVR-016
+    status: 確定
+    title: ボス戦闘システムとステージ1ボス
+    specification:
+      common_flow: ボス警告後に通常敵と敵弾を消去し、スクロールを停止して制限時間付きのボス戦へ移行する
+      phase_transition: 残り耐久率が67%未満、34%未満になった時点で攻撃フェーズを順に切り替える
+      terminal_states:
+        defeated: 耐久力が0になった時点で撃破点を加算して次ステージへ進む
+        retreated: 制限時間が0になった時点で撃破点を加算せず次ステージへ進む
+      stage_1_boss:
+        name: 機動巡洋艦 セレノア
+        role: 狙い弾から扇状弾、交差弾、全周弾へ段階的に変化し、ステージ1で学んだ回避を確認する
+        hp: 28
+        timeout_seconds: 35
+        defeat_score: 5000
+    decision_reason: ボスの状態遷移を描画処理から独立させ、耐久力低下を攻撃変化として明示しながら撃破と撤退を一度だけ確定するため。
+    related_ids: [OVR-004, DAT-003, DAT-009, UI-010]
+
+  - id: OVR-017
+    status: 確定
+    title: 状態連動型の演出と音響
+    specification:
+      music:
+        stage: 三角波を中心とした8音の反復フレーズ
+        boss: 低音の鋸歯状波を中心とした高速な8音の反復フレーズ
+        transition: ステージ開始とボス開始時に直前の反復を停止し、対応するBGMを先頭から開始する
+      sound_effects: [空中攻撃, 地上攻撃, 敵への命中, 撃破, チェックポイント, ボス警告, ボス攻撃変化, SYNC_BURST, ゲームクリア]
+      visual_feedback: [撃破粒子, 得点ポップアップ, CHAIN倍率通知, チェックポイント通知, ボス登場振動, ボス攻撃変化フラッシュ]
+      asset_policy: Web Audio APIとPhaserのプリミティブ描画で実行時生成し、外部素材を使用しない
+    decision_reason: プレイ状態の変化を視覚と音の両方で即時に伝えつつ、既定の外部素材不使用方針を維持するため。
+    related_ids: [OVR-009, OVR-012, OVR-016, UI-011]
+
+  - id: OVR-018
+    status: 確定
+    title: 初期プレイモードと設定範囲
+    specification:
+      play_modes: [通常モード]
+      normal_mode: ステージ1から5を連続して攻略し、ゲームオーバーまたはゲームクリア時にスコアを登録する既定の進行
+      excluded_modes: [ステージ練習, スコアアタック, 難易度選択, 追加ルールモード]
+      settings: [BGM音量, 効果音量]
+      gameplay_adjustments: なし
+    decision_reason: 人間の判断により、追加モードを増やす前に通常モード単体の面白さを確認できる構成を優先する。
+    related_ids: [OVR-004, OVR-007, DAT-010, UI-012]
+
+  - id: OVR-019
+    status: 確定
+    title: ステージ1完成度向上方針
+    specification:
+      priority: ステージ2以降の制作より、通常モードの核となるステージ1の面白さと爽快感の検証・改善を優先する
+      first_improvement: 敵撃破時の視覚、時間、画面振動、音響フィードバックを敵規模別に強化する
+      evaluation_order: [破壊演出の実装, 人間による実プレイ評価, 追加改善項目の再計画, ステージ2以降の制作判断]
+    decision_reason: 人間の評価により、通常モードが楽しいと感じられる完成度を確認してから追加ステージへ展開する方針へ変更した。
+    related_ids: [OVR-015, OVR-017, DAT-011, UI-013]
+
+  - id: OVR-020
+    status: 確定
+    title: 敵弾速度と通常敵耐久力の再調整
+    specification:
+      enemy_bullet_speed: 従来計算値の0.8倍
+      normal_enemy_hp: 1
+      normal_enemy_scope: 全ステージの空中敵と地上敵
+      excluded_from_normal_hp: [中ボス, ボス]
+    decision_reason: 人間のプレイ評価により敵弾が速すぎるため回避可能時間を増やし、雑魚敵を一撃で破壊できる爽快感を優先した。
+    related_ids: [OVR-008, OVR-014, DAT-013]
+
+  - id: OVR-021
+    status: 確定
+    title: 自機被弾時の爆発フィードバック
+    specification:
+      trigger: 無敵状態ではない自機が敵弾または敵本体へ接触した時
+      effects: [青白い中心発光, 拡大衝撃波, 青色機体破片, 3回の時間差爆発, 55msのヒットストップ, 画面フラッシュ, 画面振動, 専用破壊音]
+      lifecycle: 爆発開始と同時に自機を非表示にし、従来の残機減少、ゲームオーバー、チェックポイント復帰処理を継続する
+    decision_reason: 人間の指示により、被弾結果を明確にし、自機喪失にも敵撃破と同等の視聴覚的な手応えを持たせるため。
+    related_ids: [OVR-006, DAT-011, UI-004, UI-013]
 
 open_issues: []

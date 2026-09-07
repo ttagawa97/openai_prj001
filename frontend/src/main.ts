@@ -5,6 +5,7 @@ import { GameScene } from './scenes/GameScene';
 import { RankingScene } from './scenes/RankingScene';
 import { ResultScene } from './scenes/ResultScene';
 import { ExitScene } from './scenes/ExitScene';
+import { SettingsScene } from './scenes/SettingsScene';
 
 export const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -15,5 +16,5 @@ export const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   physics: { default: 'arcade', arcade: { debug: false } },
   fps: { target: 60 },
-  scene: [MenuScene, GameScene, RankingScene, ResultScene, ExitScene],
+  scene: [MenuScene, GameScene, RankingScene, SettingsScene, ResultScene, ExitScene],
 });

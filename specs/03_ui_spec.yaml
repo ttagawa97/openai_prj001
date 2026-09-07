@@ -44,11 +44,12 @@ screens:
     name: タイトル画面
     layout:
       top: オリジナルのゲームタイトル
-      center: [ゲーム開始, スコア表示, 終了]
-      bottom: 操作説明（カーソル移動、Z空中攻撃、X地上攻撃）
+      center: [ゲーム開始, スコア表示, 設定, 終了]
+      bottom: 操作説明（カーソル移動、Z空中攻撃、X地上攻撃、C SYNC BURST）
     actions:
       ゲーム開始: 新規GameSessionStateを生成しゲーム画面へ遷移
       スコア表示: ランキング画面へ遷移
+      設定: 設定画面へ遷移
       終了: 終了画面へ遷移
     related_ids: [DAT-003]
 
@@ -61,23 +62,47 @@ screens:
         left: SCORE
         center: STAGE
         right: 残機数
+      combat_hud:
+        content: [空地連携数, 得点倍率, SYNCゲージ, SYNC BURST発動可否と残り時間]
+        behavior: 戦闘状態の変化をフレームごとに反映する
       ground_target:
         shape: 円と直交する水平線・垂直線で構成するクロスヘア
-        position: 自機前方210pxの地上攻撃着弾予定点
+        position: 自機前方210pxの地上敵ロックオン判定位置
         behavior: ゲームプレイ中は常時表示して自機の移動に追従し、画面上端では見切れない位置に制限する
         color: "#7CFF6B"
-        impact_lock: 爆弾投下後は、投下時に確定した着弾点にも着弾まで照準を表示する
-        decision_reason: 地上攻撃の現在の着弾予定点と、投下済み爆弾の着弾点を明確に区別して把握できるようにするため。
+        lock_display:
+          target_ring: ロック済みの各地上敵へ緑色の脈動する円を表示する
+          lock_count: ロック順に1個から3個の点を対象円の上へ表示する
+          maximum: 3
+        decision_reason: 照準位置、捕捉済みの対象、現在のロック数をゲーム画面だけで判別できるようにするため。
+      guided_ground_laser:
+        trigger: 1体以上をロック中にXキーを入力する
+        simultaneous_fire: ロック済みの全対象へ同時に1本ずつ発射する
+        appearance: 半透明の太い青色光と細い緑色光、先端の白色発光を重ねる
+        trajectory: 対象ごとに左右へずらした二次ベジェ曲線を描き、先端を対象位置へ追従させる
+        hit_timing: レーザー先端が対象へ到達した時点
       enemy_identification:
         air_enemy:
-          shape: 前進翼と尖った機首を持つ航空機シルエット
+          shape: 偵察機は前進翼、迎撃機は細長い三角翼、重攻撃機は幅広の機体で識別する
           primary_color: "#FF4D5A"
         ground_enemy:
-          shape: 左右の履帯、矩形の車体、円形砲塔、砲身を持つ戦車シルエット
+          shape: 戦車は履帯と円形砲塔、対空戦車は角型車体と二連砲、固定砲台は八角形基部で識別する
           primary_color: "#FFCC33"
         rule: 色だけに依存せず、シルエットのみでも空中敵と地上敵を識別可能にする
         decision_reason: プレイヤーが使用すべき攻撃種別を敵の外観から即座に判断できるようにするため。
+      attack_telegraph:
+        appearance: 発射元から発射方向へ半透明の赤い照準線を表示
+        duration_ms: 450
+        behavior: 表示開始時の方向を固定し、線の消灯直後に攻撃する
       boss_hud: ボス戦中のみ画面上部にボス耐久ゲージと残り時間を表示
+      stage_title:
+        content: ステージ番号とステージ名
+        behavior: ステージ開始時に更新し、前ステージのタイトルを残さず同時に1件のみ表示する
+        decision_reason: ステージ切替時のタイトル重複を防ぎ、現在のステージだけを明示するため。
+      boss_warning:
+        content: WARNING
+        timing: ボス開始2秒前
+        behavior: タイムラインイベントで表示し、ボス開始時までに消去する
     controls:
       ArrowUp: 上移動
       ArrowDown: 下移動
@@ -85,11 +110,15 @@ screens:
       ArrowRight: 右移動
       KeyZ: 空中攻撃
       KeyX: 地上攻撃
+      KeyC: SYNCゲージ100時にSYNC BURSTを発動
     behavior:
       - 自機を画面外へ移動させない
       - キー押下継続で移動と空中攻撃を継続する
-      - 地上攻撃は投下間隔を設け、照準・投下・着弾範囲を視覚表示する
+      - 地上攻撃は発射間隔を設け、最大3体のロック状態と誘導レーザー軌道を視覚表示する
       - ZキーとXキーの同時押下時は、空中攻撃と地上攻撃を独立して同時に発射する
+      - 自機の接触当たり判定は機体中央の12x12pxとし、視覚上の機体全体より小さくする
+      - 被弾時は自機位置で専用爆発を表示してから、ゲームオーバーまたはチェックポイント復帰へ進む
+      - ミス後の復帰時は1.4秒間無敵とし、点滅表示で無敵状態を明示する
       - ボス出現時はスクロールを停止し、撃破または時間切れまでボス戦を継続する
       - 一時停止機能は初期範囲に含めない
     related_ids: [OVR-004, OVR-005, DAT-003]
@@ -129,15 +158,107 @@ screens:
       recovery: ページ再読み込みのみでタイトル画面へ戻る
     decision_reason: ブラウザからタブを閉じる処理は制限されるため、要件どおりアプリ内操作を無効化する。
 
+  - id: UI-009
+    status: 確定
+    name: ステージ1背景・地形・中ボス表示
+    specification:
+      background: 港湾の水面色と横方向の航跡線を縦スクロールに合わせて描画する
+      terrain: 区間ごとに左右の岸壁、防波堤、貨物泊地を矩形と輪郭線で描画する
+      progression: [港口, 防波堤, 貨物泊地, 朝日の水路]
+      midboss:
+        name: 湾岸哨戒艇 アルバ
+        appearance: 通常敵より大型の幅広機体
+        hud: 出現中は画面上部に名称を表示し、撃破時に消去する
+    decision_reason: 外部画像素材を追加せず、各攻略区間と中間目標を視覚的に識別可能にするため。
+    related_ids: [UI-002, UI-004, OVR-015, DAT-008]
+
+  - id: UI-010
+    status: 確定
+    name: ステージ1ボス表示
+    specification:
+      appearance: 通常敵および中ボスと区別できる大型の双胴巡洋艦シルエット
+      colors: {hull: "#6F7FA7", core: "#48D7FF", weapon: "#FFCC33"}
+      movement: 画面上部で左右に周期移動する
+      hud:
+        content: [ボス名, 現在の攻撃フェーズ, 現在耐久力, 最大耐久力, 残り秒数]
+        visibility: ボス戦開始時に表示し、撃破または撤退時に消去する
+      attack_feedback: 耐久力の低下に合わせて弾速と発射頻度を段階的に上げる
+    decision_reason: ボス固有の外観と段階的な攻撃変化をHUDと動きの両方から把握できるようにするため。
+    related_ids: [UI-004, OVR-016, DAT-009]
+
+  - id: UI-011
+    status: 確定
+    name: 戦闘フィードバック演出
+    specification:
+      stage_title: 1.2秒表示後、上方向へ移動しながら0.7秒で消える
+      enemy_hit: 白い短時間点滅と短い命中音
+      enemy_defeat:
+        particles: 敵種の識別色で外周へ広がり、0.6秒以内に消える
+        score_popup: 撃破地点から上昇しながら加算得点を表示する
+      chain: 空地連携が偶数回へ到達した際に現在倍率を中央へ表示する
+      checkpoint: CHECKPOINTを中央へ表示し、2音の通知音を再生する
+      sync_burst: 自機を中心とする緑色の放射粒子、画面フラッシュ、上昇音を同時に再生する
+      boss:
+        warning: WARNING点滅と警告音
+        entrance: 画面振動、青色の放射粒子、ボスBGMへの切り替え
+        phase_change: 画面フラッシュ、短い振動、ATTACK SHIFT表示、下降音
+      performance: 粒子はPhaserの一時オブジェクトとして生成し、Tween終了時に必ず破棄する
+    decision_reason: プレイヤー操作を妨げない短時間表示で、命中、得点、進行、特殊能力、危険度変化を判別可能にするため。
+    related_ids: [UI-004, OVR-012, OVR-016, OVR-017]
+
+  - id: UI-012
+    status: 確定
+    name: 設定画面
+    layout:
+      top: 設定
+      center: [BGM音量, 効果音量]
+      bottom: 操作説明
+    controls:
+      ArrowUp_ArrowDown: 設定項目を選択
+      ArrowLeft_ArrowRight: 選択項目を10単位で増減
+      Z_Enter_Escape: 設定を維持してタイトル画面へ戻る
+    display:
+      range: 0%から100%
+      muted: 0の場合は「ミュート」と表示する
+      focus: 選択項目をアクセント色とカーソルで示す
+    behavior: 設定値はページを再読み込みするまでタイトル画面とゲーム画面で共有する
+    decision_reason: キーボードだけで既存の操作規約に沿って音量を調整できる最小構成とするため。
+    related_ids: [UI-002, UI-003, OVR-018, DAT-010]
+
+  - id: UI-013
+    status: 確定
+    name: 敵破壊の爽快感演出
+    specification:
+      common_sequence:
+        - 撃破フレームで物理挙動を短時間停止する
+        - 中心を強く発光させる
+        - 輪郭のみの衝撃波を拡大して消す
+        - 発光粒子と回転する機体破片を異なる速度で放射する
+        - 低音と高音を重ねた破壊音を再生する
+      air_enemy: 赤系破片と短く鋭い爆発を使用する
+      ground_enemy: 茶系破片、空中敵より大きい半径と多い粒子で重量感を出す
+      midboss: 3回の時間差爆発、50msのヒットストップ、中規模の画面振動を使用する
+      boss: 5回の時間差爆発、75msのヒットストップ、大規模な衝撃波と画面振動を使用する
+      player_destroyed:
+        colors: 青白い中心光と青色の機体破片
+        sequence: 中心発光、衝撃波、12個の三角形破片、3回の時間差爆発を重ねる
+        impact: 55msのヒットストップ、青白い画面フラッシュ、420msの画面振動、3段階に下降する専用破壊音
+        transition: 爆発開始時に自機を非表示とし、900ms後に復帰処理へ進む
+      cleanup: 発光、衝撃波、粒子、破片はTween完了時に破棄する
+    decision_reason: 撃破対象の大きさと種類を、明暗、広がり、停止時間、振動、音の差として知覚させ、攻撃成功時の爽快感を強化するため。
+    related_ids: [UI-004, UI-011, OVR-019, DAT-011]
+
 transitions:
   - id: UI-008
     status: 確定
     routes:
       - タイトル画面 -> ゲーム画面: ゲーム開始
       - タイトル画面 -> スコアランキング画面: スコア表示
+      - タイトル画面 -> 設定画面: 設定
       - タイトル画面 -> 終了画面: 終了
       - ゲーム画面 -> プレイ終了表示: ゲームオーバーまたはゲームクリア
       - プレイ終了表示 -> タイトル画面: 確認入力
       - スコアランキング画面 -> タイトル画面: 戻る入力
+      - 設定画面 -> タイトル画面: 戻る入力
 
 open_issues: []

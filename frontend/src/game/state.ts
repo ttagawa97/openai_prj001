@@ -1,4 +1,5 @@
 import type { GameOutcome } from '@skyline/shared';
+import { newCombatState, type CombatState } from './combat';
 
 export interface GameSession {
   score: number;
@@ -8,6 +9,7 @@ export interface GameSession {
   checkpointProgress: number;
   playerState: 'playing' | 'respawning' | 'game_over' | 'game_clear';
   bossState: 'none' | 'active' | 'defeated' | 'retreated';
+  combat: CombatState;
 }
 
 export const newSession = (): GameSession => ({
@@ -18,6 +20,7 @@ export const newSession = (): GameSession => ({
   checkpointProgress: 0,
   playerState: 'playing',
   bossState: 'none',
+  combat: newCombatState(),
 });
 
 export function applyPlayerDestroyed(session: GameSession): 'respawn' | 'game_over' {

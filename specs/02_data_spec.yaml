@@ -45,8 +45,15 @@ data_entities:
       checkpoint_id: {type: string, initial: stage-1-start}
       player_state: {type: string, enum: [playing, respawning, game_over, game_clear]}
       boss_state: {type: string, enum: [none, active, defeated, retreated]}
+      combat_state:
+        sync_gauge: {type: integer, minimum: 0, maximum: 100, initial: 0}
+        chain_count: {type: integer, minimum: 0, initial: 0}
+        chain_target: {type: string, enum: [air, ground, null], initial: null}
+        chain_expires_at: {type: number, initial: 0, description: シーン内ミリ秒時刻}
+        score_multiplier: {type: integer, minimum: 1, maximum: 5, initial: 1}
+        burst_ends_at: {type: number, initial: 0, description: シーン内ミリ秒時刻}
     lifecycle: 新規ゲーム開始時に生成し、タイトルへ戻った後は破棄する
-    related_ids: [OVR-006, UI-004]
+    related_ids: [OVR-006, OVR-012, UI-004]
 
   - id: DAT-004
     status: 確定
@@ -64,8 +71,190 @@ data_entities:
       stage_names: [暁の湾岸, 翠風渓谷, 雲海要塞, 黄昏火山帯, 星環中枢]
       checkpoint_policy: 各ステージの開始、道中2地点、ボス開始地点に配置する
       boss_timeout_seconds: [35, 35, 40, 40, 45]
-    decision_reason: 難易度を段階的に上げつつ、再開区間が長くなりすぎない構成として具体化した。
+      air_enemy_bullet_interval_ms: [2800, 2500, 2200, 1900, 1600]
+      ground_enemy_bullet_interval_ms: [1800, 1600, 1400, 1200, 1000]
+      boss_bullet_interval_ms: [850, 750, 650, 550, 450]
+      normal_enemy_hp: [1, 1, 1, 1, 1]
+    decision_reason: 難易度を段階的に上げつつ、再開区間が長くなりすぎない構成とした。通常の空中敵は反応できる発射間隔を確保し、ボスは通常敵より短い間隔で発射する難易度調整を行う。
     related_ids: [OVR-004, OVR-008]
+
+  - id: DAT-006
+    status: 確定
+    name: StageTimeline
+    persistence: フロントエンドメモリのみ（StageDefinitionから起動時に生成）
+    fields:
+      stage_id: {type: integer, minimum: 1, maximum: 5}
+      seed: {type: integer, minimum: 1}
+      duration_ms: {type: integer, minimum: 1}
+      events:
+        type: array
+        ordering: at_ms昇順、同一時刻ではevent_id昇順
+        item_common_fields:
+          event_id: {type: string, required: true, unique_within_stage: true}
+          at_ms: {type: integer, minimum: 0, required: true}
+        event_types:
+          enemy_wave:
+            fields: [enemies]
+            enemy_fields: [archetype_id, target_class, spawn_x, spawn_y, movement_path]
+          checkpoint:
+            fields: [checkpoint_id, progress_seconds]
+          boss_warning:
+            fields: [message]
+          boss_start:
+            fields: []
+      movement_path:
+        variants:
+          linear: [velocity_x, velocity_y]
+          sine: [velocity_y, amplitude, period_ms]
+    generation:
+      seed_by_stage: [104729, 209759, 314777, 419789, 524801]
+      basic_formation: 空中敵と地上敵を交互に配置し、一部の空中編隊は2機の左右編隊とする
+      boss_warning_lead_ms: 2000
+    validation:
+      - 同一入力からの生成結果が一致する
+      - event_idがステージ内で一意
+      - 全イベントが0以上でduration_ms以下
+      - boss_startが1件でduration_msに配置される
+      - StageDefinitionの全チェックポイントを含む
+    related_ids: [OVR-013, DAT-003, DAT-004]
+
+  - id: DAT-007
+    status: 確定
+    name: EnemyArchetype
+    persistence: フロントエンドの静的定義
+    fields:
+      id: {type: string, required: true, unique: true}
+      target_class: {type: string, enum: [air, ground]}
+      texture_key: {type: string, required: true}
+      hp_multiplier: {type: number, exclusive_minimum: 0}
+      speed_multiplier: {type: number, exclusive_minimum: 0}
+      score: {type: integer, minimum: 1}
+      attack_pattern: {type: string, enum: [aimed, fan-3, fan-5, radial-8, cross-4, telegraphed-fan-3]}
+      attack_cooldown_multiplier: {type: number, minimum: 1}
+      bullet_speed_multiplier: {type: number, exclusive_minimum: 0}
+    validation:
+      - ID、テクスチャ、弾幕パターン参照が有効
+      - 弾数の多い攻撃ほど発射間隔係数を長くする
+      - 各ステージの使用可能敵種をタイムライン生成時に検証する
+    related_ids: [OVR-014, DAT-004, DAT-006]
+
+  - id: DAT-008
+    status: 確定
+    name: StageOneAuthoredContent
+    persistence: フロントエンドの静的定義
+    fields:
+      sections: {type: array, values: [introduction, development, midboss, finale]}
+      waves: {type: array, description: 固定時刻、所属区間、敵種、位置、移動経路}
+      map_segments: {type: array, description: 開始・終了時刻、水面色、岸壁位置、地形矩形}
+      midboss: {type: object, fields: [開始時刻, 名称, 耐久力, 撃破点]}
+    validation:
+      - 4区間すべてに敵編成が存在する
+      - マップセグメントが0秒から32秒まで隙間なく連続する
+      - 中ボス開始イベントが1件だけ存在する
+      - 空中敵と地上敵を同一編成に含む空地連携攻略区間が存在する
+    decision_reason: ステージ1の攻略順序を調整可能なデータとして分離し、描画・タイムライン・テストで共有するため。
+    related_ids: [OVR-015, DAT-004, DAT-006, UI-009]
+
+  - id: DAT-009
+    status: 確定
+    name: BossDefinitionAndEncounter
+    persistence: フロントエンドの静的定義およびプレイ中メモリ
+    definition_fields:
+      name: {type: string, required: true}
+      hp: {type: integer, minimum: 1}
+      timeout: {type: integer, minimum: 1, unit: seconds}
+      score: {type: integer, minimum: 1}
+      bullet_interval: {type: integer, minimum: 1, unit: milliseconds}
+      phases:
+        type: array
+        minimum_items: 2
+        item_fields: [id, starts_at_hp_ratio, patterns, bullet_interval_multiplier, bullet_speed_multiplier]
+    encounter_fields:
+      status: {type: string, enum: [active, defeated, retreated]}
+      hp: {type: integer, minimum: 0}
+      max_hp: {type: integer, minimum: 1}
+      remaining_ms: {type: number, minimum: 0}
+      attack_count: {type: integer, minimum: 0}
+    stage_1_phases:
+      - {id: approach, hp_range: 100%-67%, patterns: [aimed, fan-3], interval_multiplier: 1.0, speed_multiplier: 1.0}
+      - {id: crossfire, hp_range: 67%-34%, patterns: [fan-5, cross-4], interval_multiplier: 0.86, speed_multiplier: 1.08}
+      - {id: last-stand, hp_range: 34%-0%, patterns: [radial-8, fan-3], interval_multiplier: 0.72, speed_multiplier: 1.16}
+    validation:
+      - ボス定義に2件以上の有効な攻撃フェーズが存在する
+      - 撃破または撤退後はタイマーとダメージで状態が変化しない
+      - 各フェーズ内の攻撃パターンを攻撃回数により決定的に循環する
+    related_ids: [OVR-016, DAT-003, DAT-004, UI-010]
+
+  - id: DAT-010
+    status: 確定
+    name: GameSettings
+    persistence: フロントエンドメモリのみ
+    fields:
+      bgm_volume: {type: integer, minimum: 0, maximum: 100, step: 10, initial: 70}
+      sfx_volume: {type: integer, minimum: 0, maximum: 100, step: 10, initial: 70}
+    behavior:
+      - 0はミュートとして扱う
+      - 変更は次に生成される音から即時反映する
+      - ページ再読み込み時に初期値へ戻す
+      - プレイモード、スコア、ゲーム進行へ影響しない
+    decision_reason: 音量調整を提供しつつ、未決定のデータ保持期間や永続化方式を追加しないため。
+    related_ids: [OVR-017, OVR-018, UI-012]
+
+  - id: DAT-011
+    status: 確定
+    name: DestructionEffectProfile
+    persistence: フロントエンドの静的定義
+    dimensions:
+      target_class: [air, ground]
+      destruction_scale: [normal, midboss, boss]
+    fields:
+      colors: [core_color, fragment_color]
+      particle_count: {type: integer, minimum: 1}
+      fragment_count: {type: integer, minimum: 1}
+      radius: {type: number, minimum: 1}
+      duration_ms: {type: integer, minimum: 1}
+      hit_stop_ms: {type: integer, minimum: 0}
+      camera_shake: {type: number, minimum: 0}
+      camera_shake_ms: {type: integer, minimum: 0}
+      explosion_bursts: {type: integer, minimum: 1}
+    scaling_rule: 通常敵、中ボス、ボスの順でヒットストップ、画面振動、粒子数、破片数、連続爆発数を増やす
+    target_rule: 地上敵は空中敵より土煙を想起する色と大きい通常爆発半径を使用する
+    related_ids: [OVR-019, UI-013]
+
+  - id: DAT-012
+    status: 確定
+    name: GroundLockOnState
+    persistence: ゲーム画面のメモリのみ
+    fields:
+      locked_targets:
+        type: array
+        maximum_items: 3
+        item: 有効な地上敵オブジェクトへの参照
+        uniqueness: 同一敵を重複して含めない
+    constants:
+      maximum_locks: 3
+      acquisition_radius_px: 34
+      ground_attack_interval_ms: 600
+      sync_burst_attack_interval_ms: 300
+    lifecycle:
+      acquire: 地上照準中心から34px以内に入った有効な地上敵を空き枠へ追加する
+      consume: Xキーによる発射時に全参照を誘導レーザーへ渡し、ロック一覧を空にする
+      discard: 対象撃破、画面外離脱、ステージ開始、チェックポイント復帰、ボス戦開始時に無効な参照を除去する
+    laser_path: 自機位置、制御点、追従する対象位置から二次ベジェ曲線をフレームごとに生成する
+    related_ids: [OVR-005, UI-004]
+
+  - id: DAT-013
+    status: 確定
+    name: CombatBalanceConstants
+    persistence: フロントエンドの静的定義
+    fields:
+      enemy_bullet_speed_scale: {type: number, value: 0.8}
+      normal_enemy_hp: {type: integer, value: 1}
+    application:
+      enemy_bullet_speed_scale: 通常敵、中ボス、ボスが生成する全敵弾の最終速度へ乗算する
+      normal_enemy_hp: 通常敵生成時に敵種別とステージの耐久倍率より優先して適用する
+    exclusions: 中ボスとボスは各定義の耐久力を使用する
+    related_ids: [OVR-020, DAT-004, DAT-007, DAT-009]
 
 migration:
   - id: DAT-005

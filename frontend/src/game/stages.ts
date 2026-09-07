@@ -1,3 +1,5 @@
+import type { BossDefinition } from './boss';
+
 export interface StageDefinition {
   stageId: number;
   name: string;
@@ -6,9 +8,34 @@ export interface StageDefinition {
   enemyInterval: number;
   enemySpeed: number;
   enemyHp: number;
-  bulletInterval: number;
-  boss: { hp: number; timeout: number; score: number };
+  airBulletInterval: number;
+  groundBulletInterval: number;
+  boss: BossDefinition;
 }
+
+const standardBossPhases: BossDefinition['phases'] = [
+  {
+    id: 'approach',
+    startsAtHpRatio: 0.67,
+    patterns: ['aimed', 'fan-3'],
+    bulletIntervalMultiplier: 1,
+    bulletSpeedMultiplier: 1,
+  },
+  {
+    id: 'crossfire',
+    startsAtHpRatio: 0.34,
+    patterns: ['fan-5', 'cross-4'],
+    bulletIntervalMultiplier: 0.86,
+    bulletSpeedMultiplier: 1.08,
+  },
+  {
+    id: 'last-stand',
+    startsAtHpRatio: 0.01,
+    patterns: ['radial-8', 'fan-3'],
+    bulletIntervalMultiplier: 0.72,
+    bulletSpeedMultiplier: 1.16,
+  },
+];
 
 export const stages: StageDefinition[] = [
   {
@@ -19,8 +46,16 @@ export const stages: StageDefinition[] = [
     enemyInterval: 1200,
     enemySpeed: 85,
     enemyHp: 1,
-    bulletInterval: 1800,
-    boss: { hp: 28, timeout: 35, score: 5000 },
+    airBulletInterval: 2800,
+    groundBulletInterval: 1800,
+    boss: {
+      name: '機動巡洋艦 セレノア',
+      hp: 28,
+      timeout: 35,
+      score: 5000,
+      bulletInterval: 850,
+      phases: standardBossPhases,
+    },
   },
   {
     stageId: 2,
@@ -29,9 +64,17 @@ export const stages: StageDefinition[] = [
     checkpoints: [0, 13, 26, 36],
     enemyInterval: 1050,
     enemySpeed: 100,
-    enemyHp: 2,
-    bulletInterval: 1600,
-    boss: { hp: 40, timeout: 35, score: 7500 },
+    enemyHp: 1,
+    airBulletInterval: 2500,
+    groundBulletInterval: 1600,
+    boss: {
+      name: '渓谷守備艦',
+      hp: 40,
+      timeout: 35,
+      score: 7500,
+      bulletInterval: 750,
+      phases: standardBossPhases,
+    },
   },
   {
     stageId: 3,
@@ -40,9 +83,17 @@ export const stages: StageDefinition[] = [
     checkpoints: [0, 14, 28, 40],
     enemyInterval: 900,
     enemySpeed: 115,
-    enemyHp: 2,
-    bulletInterval: 1400,
-    boss: { hp: 52, timeout: 40, score: 10000 },
+    enemyHp: 1,
+    airBulletInterval: 2200,
+    groundBulletInterval: 1400,
+    boss: {
+      name: '雲海要塞中枢',
+      hp: 52,
+      timeout: 40,
+      score: 10000,
+      bulletInterval: 650,
+      phases: standardBossPhases,
+    },
   },
   {
     stageId: 4,
@@ -51,9 +102,17 @@ export const stages: StageDefinition[] = [
     checkpoints: [0, 15, 30, 44],
     enemyInterval: 780,
     enemySpeed: 130,
-    enemyHp: 3,
-    bulletInterval: 1200,
-    boss: { hp: 68, timeout: 40, score: 15000 },
+    enemyHp: 1,
+    airBulletInterval: 1900,
+    groundBulletInterval: 1200,
+    boss: {
+      name: '火山帯制圧艦',
+      hp: 68,
+      timeout: 40,
+      score: 15000,
+      bulletInterval: 550,
+      phases: standardBossPhases,
+    },
   },
   {
     stageId: 5,
@@ -62,9 +121,17 @@ export const stages: StageDefinition[] = [
     checkpoints: [0, 16, 32, 48],
     enemyInterval: 650,
     enemySpeed: 145,
-    enemyHp: 3,
-    bulletInterval: 1000,
-    boss: { hp: 85, timeout: 45, score: 25000 },
+    enemyHp: 1,
+    airBulletInterval: 1600,
+    groundBulletInterval: 1000,
+    boss: {
+      name: '星環中枢機構',
+      hp: 85,
+      timeout: 45,
+      score: 25000,
+      bulletInterval: 450,
+      phases: standardBossPhases,
+    },
   },
 ];
 
@@ -77,6 +144,13 @@ export function validateStages(definitions: StageDefinition[]): string[] {
       errors.push(`stage ${stage.stageId} のチェックポイントが不正です`);
     if (stage.boss.hp <= 0 || stage.boss.timeout <= 0)
       errors.push(`stage ${stage.stageId} のボス設定が不正です`);
+    if (stage.enemyHp !== 1) errors.push(`stage ${stage.stageId} の通常敵耐久力が不正です`);
+    if (
+      stage.airBulletInterval <= 0 ||
+      stage.groundBulletInterval <= 0 ||
+      stage.boss.bulletInterval <= 0
+    )
+      errors.push(`stage ${stage.stageId} の弾発射間隔が不正です`);
   });
   return errors;
 }

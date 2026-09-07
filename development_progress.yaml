@@ -1,0 +1,207 @@
+schema_version: 1
+updated_on: '2026-09-07'
+purpose: 中断後に正式仕様、実装状態、検証結果を失わず、フェーズ単位で作業を再開するための進捗台帳
+
+source_of_truth:
+  application_specifications: specs/*.yaml
+  workflow_rules: AGENTS.md
+  progress_and_handoff: development_progress.yaml
+
+workflow:
+  mode: phase_gate
+  rule: 各フェーズの完了結果を人間が確認し、明示的な許可後に次フェーズを開始する
+  autonomous_scope:
+    - 一般的なゲーム仕様の補完
+    - 敵編成、弾幕、ステージ構成、調整値の自動設計
+    - 正式仕様の差分更新
+    - 実装、テスト、開発環境検証
+  human_decision_required:
+    - 課金に影響する仕様
+    - セキュリティポリシー
+    - データ保持期間
+    - SLA
+    - 権限モデル
+    - 大きなインフラ構成変更
+    - 技術スタック変更
+    - 外部サービス追加
+    - 配布形態と販売方針
+
+phases:
+  - id: phase-1
+    name: 戦闘基盤とゲーム固有システム
+    status: completed
+    delivered:
+      - 空地連携CHAINと最大5倍の得点倍率
+      - SYNCゲージとCキーによるSYNC BURST
+      - 敵弾消去と4秒間の攻撃強化
+      - 12x12pxの自機当たり判定
+      - 復帰後1.4秒の無敵と点滅表示
+    primary_files:
+      - frontend/src/game/combat.ts
+      - frontend/src/game/combat.test.ts
+      - frontend/src/game/state.ts
+      - frontend/src/scenes/GameScene.ts
+
+  - id: phase-2
+    name: ステージ生成・再生基盤
+    status: completed
+    delivered:
+      - 固定シードによる決定的タイムライン生成
+      - 敵編隊、出現時刻、直線・蛇行経路、チェックポイント、ボス開始
+      - チェックポイン時刻からの再生再開
+      - Math.randomに依存しない敵編成
+    primary_files:
+      - frontend/src/game/stageTimeline.ts
+      - frontend/src/game/stageTimeline.test.ts
+
+  - id: phase-3
+    name: 敵・弾幕ライブラリ
+    status: completed
+    delivered:
+      - 空中3種、地上3種の敵カタログと固有シルエット
+      - 狙い弾、3・5方向弾、全周8方向弾、交差4方向弾、予告攻撃
+      - ステージ進行に応じた敵種の段階解放
+      - 多方向弾の画面外回収
+    primary_files:
+      - frontend/src/game/enemies.ts
+      - frontend/src/game/enemies.test.ts
+      - frontend/src/game/bulletPatterns.ts
+      - frontend/src/game/bulletPatterns.test.ts
+
+  - id: phase-4
+    name: ステージ1完成版
+    status: completed
+    delivered:
+      - ステージ1の背景と地形
+      - 起承転結を持つ敵編成
+      - 中ボス「湾岸哨戒艇 アルバ」
+      - 開始、道中2地点、ボス開始地点のチェックポイント
+      - 空地連携を狙える攻略区間
+
+  - id: phase-5
+    name: ボスシステムとステージ1ボス
+    status: completed
+    delivered:
+      - 描画処理から独立したボス戦闘状態と撃破・撤退の排他的遷移
+      - 耐久率67%・34%を境に切り替わる3段階の攻撃フェーズ
+      - 攻撃パターン、発射間隔、弾速の段階的変化
+      - ステージ1ボス「機動巡洋艦 セレノア」の固有外観と左右移動
+      - ボス名、フェーズ、耐久力、残り時間を示すHUD
+    primary_files:
+      - frontend/src/game/boss.ts
+      - frontend/src/game/boss.test.ts
+      - frontend/src/game/stages.ts
+      - frontend/src/scenes/GameScene.ts
+
+  - id: phase-6
+    name: 演出と音響
+    status: completed
+    delivered:
+      - ステージ用・ボス用の合成BGMと状態連動切替
+      - 命中、チェックポイント、ボス警告・攻撃変化、SYNC BURSTの効果音
+      - 敵撃破粒子と加算得点ポップアップ
+      - CHAIN倍率・チェックポイントの中央通知
+      - ボス登場時の振動・粒子と攻撃変化時のフラッシュ・振動
+      - ステージタイトルの時間制フェードアウト
+    primary_files:
+      - frontend/src/audio.ts
+      - frontend/src/audio.test.ts
+      - frontend/src/scenes/GameScene.ts
+
+  - id: phase-7
+    name: プレイモードと設定
+    status: completed
+    delivered:
+      - 初期プレイモードを通常モードのみに確定
+      - モード選択を挟まない既存5ステージ進行の維持
+      - BGM音量・効果音量を0から100まで10単位で調整
+      - 音量0のミュート表示と生成音への即時反映
+      - タイトル画面から遷移するキーボード操作対応設定画面
+      - 設定値をページ再読み込みまでメモリ内で共有
+    primary_files:
+      - frontend/src/game/settings.ts
+      - frontend/src/game/settings.test.ts
+      - frontend/src/scenes/SettingsScene.ts
+      - frontend/src/scenes/MenuScene.ts
+      - frontend/src/audio.ts
+
+  - { id: phase-8, name: ステージ2から5の自動設計・生成, status: paused_for_stage_1_quality }
+
+  - id: phase-4-refinement
+    name: ステージ1完成度向上
+    status: in_progress
+    planned_scope:
+      - 爽快感を高める敵破壊演出（実装済み・人間評価待ち）
+      - 地上攻撃を最大3体のロックオン誘導レーザーへ変更（実装済み・人間評価待ち）
+      - 敵弾速度0.8倍と雑魚敵耐久力1へのバランス調整（実装済み・人間評価待ち）
+      - 自機被弾時の専用爆発演出（実装済み・人間評価待ち）
+      - 通常モードの実プレイ評価に基づく追加改善の再計画
+    delivered:
+      - 空中敵と地上敵で色、半径、粒子数が異なる破壊表現
+      - 中心発光、拡大衝撃波、発光粒子、回転破片
+      - 通常敵28ms、中ボス50ms、ボス75msのヒットストップ
+      - 敵規模に応じた画面振動と1回・3回・5回の時間差爆発
+      - 低音と高音を重ねた敵規模別の破壊音
+      - 照準が重なった地上敵の自動ロックオンと最大3体の保持
+      - ロック順とロック数を示す脈動リング・ドット表示
+      - Xキーによる全ロック対象への誘導レーザー同時発射
+      - 対象位置を追従する二次ベジェ曲線のレーザー軌道
+      - ロックなしの空撃ち防止と発射・復帰・ボス開始時のロック解除
+      - 全敵弾の最終速度を従来値の0.8倍へ調整
+      - 全ステージ・全種類の通常敵耐久力を1へ統一
+      - 中ボスとボスの固有耐久力を維持
+      - 自機被弾時の青白い中心発光と拡大衝撃波
+      - 12個の青色機体破片と3回の時間差爆発
+      - 55msのヒットストップ、画面フラッシュ、画面振動、専用破壊音
+    primary_files:
+      - frontend/src/game/destructionEffects.ts
+      - frontend/src/game/destructionEffects.test.ts
+      - frontend/src/scenes/GameScene.ts
+      - frontend/src/audio.ts
+      - frontend/src/game/lockOn.ts
+      - frontend/src/game/lockOn.test.ts
+      - frontend/src/game/balance.ts
+      - frontend/src/game/balance.test.ts
+  - { id: phase-9, name: 保存・リプレイ・ランキング, status: pending }
+  - { id: phase-10, name: 製品品質の検証, status: pending }
+  - { id: phase-11, name: 配布・販売対応, status: pending }
+
+resume_point:
+  gate: 破壊演出、地上ロックオン攻撃、敵弾速度・耐久力、自機被弾演出の人間による実プレイ評価待ち
+  current_action: 評価結果からステージ1完成度向上の次の改善項目を再計画する
+  deferred_action: フェーズ8はステージ1の再評価と再計画が完了するまで開始しない
+  approval_basis: 2026-09-07の人間によるステージ1完成度向上の再計画と爽快感対応の実装指示
+
+verification:
+  last_completed_phase: phase-7
+  results:
+    backend_unit_tests: { status: passed, files: 1, tests: 4 }
+    frontend_unit_tests: { status: passed, files: 11, tests: 47 }
+    all_workspace_typechecks: passed
+    eslint: passed
+    prettier: passed
+    all_workspace_production_builds: passed
+    development_compose_build_and_start: passed（2026-09-04再構築・起動）
+    frontend_http: { status: passed, endpoint: 'http://127.0.0.1:5173' }
+    backend_health: { status: passed, endpoint: 'http://127.0.0.1:3000/api/health' }
+  environment_state:
+    development_containers: running
+    services: [frontend, backend]
+  known_verification_limitations:
+    - PlaywrightのChromium起動に必要な共有ライブラリlibnspr4.soがホストにないため、追加済みのstage-title E2Eは未実施
+
+working_tree:
+  status: uncommitted_changes_present
+  ownership: フェーズ1から7、ステージ1完成度向上、ステージタイトル修正の作業中変更
+  instruction: 既存変更を破棄、リセット、上書きせず、差分を維持して続行する
+
+open_issues:
+  - id: PROG-002
+    status: resolved
+    issue: フェーズ7で提供するプレイモードの構成
+    resolution: 人間の判断により通常モードのみとし、追加モードと難易度選択を初期範囲から除外した
+  - id: PROG-001
+    status: deferred
+    issue: Playwrightブラウザ実行環境の共有ライブラリ不足
+    impact: 単体テスト、型検査、ビルド、HTTP起動確認に影響なし。自動ブラウザE2Eのみ影響あり。
+    required_action: フェーズ10までにPlaywright実行用依存を備えたテスト環境を決定する
