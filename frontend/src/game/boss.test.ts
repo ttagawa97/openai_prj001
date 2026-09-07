@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { stages } from './stages';
 import {
+  advanceBossMotion,
   advanceBossTimer,
   beginBossEncounter,
   currentBossPhase,
-  damageBoss,
+  damageBossPart,
   nextBossPattern,
   validateBossDefinition,
 } from './boss';
@@ -19,9 +20,11 @@ describe('boss encounter', () => {
   it('moves through the stage-one attack phases as hp falls', () => {
     const encounter = beginBossEncounter(boss);
     expect(currentBossPhase(boss, encounter).id).toBe('approach');
-    damageBoss(encounter, 10);
+    damageBossPart(encounter, 'left-arm', boss.parts['left-arm'].hp);
+    expect(currentBossPhase(boss, encounter).id).toBe('approach');
+    damageBossPart(encounter, 'right-arm', boss.parts['right-arm'].hp);
     expect(currentBossPhase(boss, encounter).id).toBe('crossfire');
-    damageBoss(encounter, 10);
+    damageBossPart(encounter, 'core', 5);
     expect(currentBossPhase(boss, encounter).id).toBe('last-stand');
   });
 
@@ -33,12 +36,38 @@ describe('boss encounter', () => {
     ]);
   });
 
+  it('requires both arms to be destroyed before the core can be damaged', () => {
+    const encounter = beginBossEncounter(boss);
+    const blocked = damageBossPart(encounter, 'core', 99);
+    expect(blocked.status).toBe('active');
+    expect(encounter.parts.core.hp).toBe(boss.parts.core.hp);
+
+    expect(damageBossPart(encounter, 'left-arm', boss.parts['left-arm'].hp).partDestroyed).toBe(
+      true,
+    );
+    const rightDestroyed = damageBossPart(encounter, 'right-arm', boss.parts['right-arm'].hp);
+    expect(rightDestroyed.coreExposed).toBe(true);
+    expect(encounter.parts.core.status).toBe('exposed');
+    expect(damageBossPart(encounter, 'core', boss.parts.core.hp).status).toBe('defeated');
+  });
+
   it('resolves defeat and timeout as terminal states', () => {
     const defeated = beginBossEncounter(boss);
-    expect(damageBoss(defeated, boss.hp)).toBe('defeated');
+    damageBossPart(defeated, 'left-arm', boss.parts['left-arm'].hp);
+    damageBossPart(defeated, 'right-arm', boss.parts['right-arm'].hp);
+    expect(damageBossPart(defeated, 'core', boss.parts.core.hp).status).toBe('defeated');
     expect(advanceBossTimer(defeated, boss.timeout * 1000)).toBe('defeated');
     const retreated = beginBossEncounter(boss);
     expect(advanceBossTimer(retreated, boss.timeout * 1000)).toBe('retreated');
-    expect(damageBoss(retreated, boss.hp)).toBe('retreated');
+    expect(damageBossPart(retreated, 'left-arm', boss.parts['left-arm'].hp).status).toBe(
+      'retreated',
+    );
+  });
+
+  it('switches into barrage-stop during configured movement windows', () => {
+    const encounter = beginBossEncounter(boss);
+    expect(advanceBossMotion(boss, encounter, 1000)).toBe('move');
+    expect(advanceBossMotion(boss, encounter, 1400)).toBe('barrage-stop');
+    expect(advanceBossMotion(boss, encounter, 1000)).toBe('move');
   });
 });

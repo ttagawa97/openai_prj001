@@ -37,6 +37,22 @@ const standardBossPhases: BossDefinition['phases'] = [
   },
 ];
 
+const bossParts = (leftArm: number, rightArm: number, core: number): BossDefinition['parts'] => ({
+  'left-arm': { hp: leftArm, offsetX: -70, offsetY: 8 },
+  'right-arm': { hp: rightArm, offsetX: 70, offsetY: 8 },
+  core: { hp: core, offsetX: 0, offsetY: 0 },
+});
+
+const standardBossMovementCycle: BossDefinition['movementCycle'] = {
+  periodMs: 6200,
+  stopWindows: [
+    { fromMs: 2300, toMs: 3300 },
+    { fromMs: 5000, toMs: 5700 },
+  ],
+  horizontalAmplitude: 145,
+  verticalAmplitude: 18,
+};
+
 export const stages: StageDefinition[] = [
   {
     stageId: 1,
@@ -54,6 +70,8 @@ export const stages: StageDefinition[] = [
       timeout: 35,
       score: 5000,
       bulletInterval: 850,
+      parts: bossParts(7, 7, 14),
+      movementCycle: standardBossMovementCycle,
       phases: standardBossPhases,
     },
   },
@@ -73,6 +91,8 @@ export const stages: StageDefinition[] = [
       timeout: 35,
       score: 7500,
       bulletInterval: 750,
+      parts: bossParts(10, 10, 20),
+      movementCycle: standardBossMovementCycle,
       phases: standardBossPhases,
     },
   },
@@ -92,6 +112,8 @@ export const stages: StageDefinition[] = [
       timeout: 40,
       score: 10000,
       bulletInterval: 650,
+      parts: bossParts(13, 13, 26),
+      movementCycle: standardBossMovementCycle,
       phases: standardBossPhases,
     },
   },
@@ -111,6 +133,8 @@ export const stages: StageDefinition[] = [
       timeout: 40,
       score: 15000,
       bulletInterval: 550,
+      parts: bossParts(17, 17, 34),
+      movementCycle: standardBossMovementCycle,
       phases: standardBossPhases,
     },
   },
@@ -130,6 +154,8 @@ export const stages: StageDefinition[] = [
       timeout: 45,
       score: 25000,
       bulletInterval: 450,
+      parts: bossParts(21, 21, 43),
+      movementCycle: standardBossMovementCycle,
       phases: standardBossPhases,
     },
   },

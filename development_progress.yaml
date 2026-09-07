@@ -135,6 +135,7 @@ phases:
       - 地上攻撃を最大3体のロックオン誘導レーザーへ変更（実装済み・人間評価待ち）
       - 敵弾速度0.8倍と雑魚敵耐久力1へのバランス調整（実装済み・人間評価待ち）
       - 自機被弾時の専用爆発演出（実装済み・人間評価待ち）
+      - ボスの停止射撃と部位破壊によるコア露出（実装済み・人間評価待ち）
       - 通常モードの実プレイ評価に基づく追加改善の再計画
     delivered:
       - 空中敵と地上敵で色、半径、粒子数が異なる破壊表現
@@ -153,6 +154,11 @@ phases:
       - 自機被弾時の青白い中心発光と拡大衝撃波
       - 12個の青色機体破片と3回の時間差爆発
       - 55msのヒットストップ、画面フラッシュ、画面振動、専用破壊音
+      - ボスが通常の左右移動中に一定周期で停止して弾幕を展開する挙動
+      - ステージ1ボスの左右アームと中央コアを別パーツとして生成
+      - 左右アーム破壊前は中央コアへのダメージを無効化
+      - 両アーム破壊後に中央コアを露出し、CORE EXPOSED通知と発光演出を表示
+      - 露出後の中央コア破壊でボス撃破、撃破点加算、次ステージ進行を確定
     primary_files:
       - frontend/src/game/destructionEffects.ts
       - frontend/src/game/destructionEffects.test.ts
@@ -162,26 +168,29 @@ phases:
       - frontend/src/game/lockOn.test.ts
       - frontend/src/game/balance.ts
       - frontend/src/game/balance.test.ts
+      - frontend/src/game/boss.ts
+      - frontend/src/game/boss.test.ts
+      - frontend/src/game/stages.ts
   - { id: phase-9, name: 保存・リプレイ・ランキング, status: pending }
   - { id: phase-10, name: 製品品質の検証, status: pending }
   - { id: phase-11, name: 配布・販売対応, status: pending }
 
 resume_point:
-  gate: 破壊演出、地上ロックオン攻撃、敵弾速度・耐久力、自機被弾演出の人間による実プレイ評価待ち
+  gate: 破壊演出、地上ロックオン攻撃、敵弾速度・耐久力、自機被弾演出、ボス停止射撃・部位破壊の人間による実プレイ評価待ち
   current_action: 評価結果からステージ1完成度向上の次の改善項目を再計画する
   deferred_action: フェーズ8はステージ1の再評価と再計画が完了するまで開始しない
-  approval_basis: 2026-09-07の人間によるステージ1完成度向上の再計画と爽快感対応の実装指示
+  approval_basis: 2026-09-07の人間によるステージ1完成度向上、爽快感対応、ボス挙動・部位破壊改善の実装指示
 
 verification:
   last_completed_phase: phase-7
   results:
     backend_unit_tests: { status: passed, files: 1, tests: 4 }
-    frontend_unit_tests: { status: passed, files: 11, tests: 47 }
+    frontend_unit_tests: { status: passed, files: 11, tests: 49 }
     all_workspace_typechecks: passed
     eslint: passed
     prettier: passed
     all_workspace_production_builds: passed
-    development_compose_build_and_start: passed（2026-09-04再構築・起動）
+    development_compose_build_and_start: passed（2026-09-07再構築・起動）
     frontend_http: { status: passed, endpoint: 'http://127.0.0.1:5173' }
     backend_health: { status: passed, endpoint: 'http://127.0.0.1:3000/api/health' }
   environment_state:
@@ -192,7 +201,7 @@ verification:
 
 working_tree:
   status: uncommitted_changes_present
-  ownership: フェーズ1から7、ステージ1完成度向上、ステージタイトル修正の作業中変更
+  ownership: ステージ1完成度向上、ボス停止射撃・部位破壊の作業中変更
   instruction: 既存変更を破棄、リセット、上書きせず、差分を維持して続行する
 
 open_issues:

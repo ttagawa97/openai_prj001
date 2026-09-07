@@ -165,22 +165,52 @@ data_entities:
       timeout: {type: integer, minimum: 1, unit: seconds}
       score: {type: integer, minimum: 1}
       bullet_interval: {type: integer, minimum: 1, unit: milliseconds}
+      parts:
+        type: object
+        fields:
+          left_arm: {hp: integer, offset_x: number, offset_y: number}
+          right_arm: {hp: integer, offset_x: number, offset_y: number}
+          core: {hp: integer, offset_x: number, offset_y: number}
+      movement_cycle:
+        type: object
+        fields: [period_ms, stop_windows, horizontal_amplitude, vertical_amplitude]
       phases:
         type: array
         minimum_items: 2
         item_fields: [id, starts_at_hp_ratio, patterns, bullet_interval_multiplier, bullet_speed_multiplier]
     encounter_fields:
       status: {type: string, enum: [active, defeated, retreated]}
-      hp: {type: integer, minimum: 0}
-      max_hp: {type: integer, minimum: 1}
+      hp: {type: integer, minimum: 0, description: 左右アームと中央コアの残り合計耐久力}
+      max_hp: {type: integer, minimum: 1, description: 全パーツ耐久力の合計}
       remaining_ms: {type: number, minimum: 0}
       attack_count: {type: integer, minimum: 0}
+      parts:
+        left_arm: {status: active | destroyed, hp: integer}
+        right_arm: {status: active | destroyed, hp: integer}
+        core: {status: sealed | exposed | destroyed, hp: integer}
+      core_exposed: {type: boolean}
+      motion_elapsed_ms: {type: number, minimum: 0}
+      motion_mode: {type: string, enum: [move, barrage_stop]}
+    stage_1_parts:
+      left_arm: {hp: 7, offset_x: -70, offset_y: 8}
+      right_arm: {hp: 7, offset_x: 70, offset_y: 8}
+      core: {hp: 14, offset_x: 0, offset_y: 0}
+    stage_1_movement_cycle:
+      period_ms: 6200
+      stop_windows:
+        - {from_ms: 2300, to_ms: 3300}
+        - {from_ms: 5000, to_ms: 5700}
+      horizontal_amplitude: 145
+      vertical_amplitude: 18
     stage_1_phases:
       - {id: approach, hp_range: 100%-67%, patterns: [aimed, fan-3], interval_multiplier: 1.0, speed_multiplier: 1.0}
       - {id: crossfire, hp_range: 67%-34%, patterns: [fan-5, cross-4], interval_multiplier: 0.86, speed_multiplier: 1.08}
       - {id: last-stand, hp_range: 34%-0%, patterns: [radial-8, fan-3], interval_multiplier: 0.72, speed_multiplier: 1.16}
     validation:
       - ボス定義に2件以上の有効な攻撃フェーズが存在する
+      - 左右アームとコアの耐久力が1以上であり、ボス最大耐久力は全パーツ耐久力の合計と一致する
+      - 左右アームが両方破壊されるまでコアはsealedであり、コアへのダメージでは耐久力が減らない
+      - 移動サイクルの停止区間はperiod_ms内に収まり、停止中は通常より短い間隔で弾幕を発射する
       - 撃破または撤退後はタイマーとダメージで状態が変化しない
       - 各フェーズ内の攻撃パターンを攻撃回数により決定的に循環する
     related_ids: [OVR-016, DAT-003, DAT-004, UI-010]

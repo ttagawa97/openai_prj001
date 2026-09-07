@@ -30,11 +30,13 @@ import {
 import { addLock, isInsideLockOnRadius, quadraticLaserPoint } from '../game/lockOn';
 import { NORMAL_ENEMY_HP, scaledEnemyBulletSpeed } from '../game/balance';
 import {
+  advanceBossMotion,
   advanceBossTimer,
   beginBossEncounter,
   currentBossPhase,
-  damageBoss,
+  damageBossPart,
   nextBossPattern,
+  type BossPartId,
   type BossEncounter,
 } from '../game/boss';
 import {
@@ -64,6 +66,9 @@ type Enemy = Phaser.Physics.Arcade.Sprite & {
   spawnedAt: number;
   attackSequence: number;
   isMidboss?: boolean;
+  bossPart?: BossPartId;
+  bossOffsetX?: number;
+  bossOffsetY?: number;
 };
 
 export class GameScene extends Phaser.Scene {
@@ -83,8 +88,10 @@ export class GameScene extends Phaser.Scene {
   private lastAir = 0;
   private lastGroundLaser = 0;
   private boss?: Enemy;
+  private bossParts: Partial<Record<BossPartId, Enemy>> = {};
   private bossEncounter?: BossEncounter;
   private bossPhaseId?: string;
+  private bossAnchor = { x: 270, y: 120 };
   private hud!: Phaser.GameObjects.Text;
   private bossHud!: Phaser.GameObjects.Text;
   private stageTitle?: Phaser.GameObjects.Text;
@@ -172,13 +179,18 @@ export class GameScene extends Phaser.Scene {
       this.processTimeline();
     } else if (this.bossEncounter) {
       const status = advanceBossTimer(this.bossEncounter, delta);
+      advanceBossMotion(this.stageDef.boss, this.bossEncounter, delta);
+      this.updateBossParts();
       const phase = currentBossPhase(this.stageDef.boss, this.bossEncounter);
       if (phase.id !== this.bossPhaseId) {
         this.bossPhaseId = phase.id;
         if (this.bossEncounter.attackCount > 0) this.showBossPhaseChange();
       }
+      const partLabel = this.bossEncounter.coreExposed
+        ? `CORE ${this.bossEncounter.parts.core.hp}`
+        : `ARM L${this.bossEncounter.parts['left-arm'].hp} R${this.bossEncounter.parts['right-arm'].hp}`;
       this.bossHud.setText(
-        `${this.stageDef.boss.name}　${phase.id}\nHP ${this.bossEncounter.hp} / ${this.bossEncounter.maxHp}　 TIME ${Math.ceil(this.bossEncounter.remainingMs / 1000)}`,
+        `${this.stageDef.boss.name}　${phase.id}　${this.bossEncounter.motionMode}\n${partLabel}　HP ${this.bossEncounter.hp} / ${this.bossEncounter.maxHp}　 TIME ${Math.ceil(this.bossEncounter.remainingMs / 1000)}`,
       );
       if (status === 'retreated') this.finishBoss(false);
     }
@@ -297,27 +309,35 @@ export class GameScene extends Phaser.Scene {
     );
     g.fillStyle(0xf4f7ff).fillCircle(22, 22, 5);
     g.generateTexture('airGunship', 44, 44);
-    // ステージ1ボス：双胴の機動巡洋艦
+    // ステージ1ボス：中央装甲と左右アームを別パーツとして描画する
     g.clear();
     g.fillStyle(0x6f7fa7);
     g.fillPoints(
       [
         [22, 2],
-        [31, 13],
-        [43, 16],
-        [38, 39],
-        [27, 34],
+        [36, 14],
+        [32, 38],
         [22, 43],
-        [17, 34],
-        [6, 39],
-        [1, 16],
-        [13, 13],
+        [12, 38],
+        [8, 14],
       ].map(([x, y]) => new Phaser.Geom.Point(x!, y!)),
       true,
     );
-    g.fillStyle(0xffcc33).fillCircle(12, 24, 5).fillCircle(32, 24, 5);
-    g.fillStyle(0x48d7ff).fillTriangle(22, 9, 17, 28, 27, 28);
+    g.fillStyle(0x26334f).fillTriangle(22, 12, 15, 31, 29, 31);
+    g.lineStyle(2, 0xb7c5ef).strokeTriangle(22, 12, 15, 31, 29, 31);
     g.generateTexture('stageOneBoss', 44, 44);
+    g.clear();
+    g.fillStyle(0x6f7fa7).fillRoundedRect(5, 10, 34, 24, 6);
+    g.fillStyle(0xffcc33).fillCircle(13, 22, 6).fillCircle(31, 22, 6);
+    g.fillStyle(0x26334f).fillRect(17, 3, 10, 36);
+    g.lineStyle(2, 0xb7c5ef).strokeRoundedRect(5, 10, 34, 24, 6);
+    g.generateTexture('stageOneBossArm', 44, 44);
+    g.clear();
+    g.fillStyle(0x203450).fillCircle(22, 22, 17);
+    g.fillStyle(0x48d7ff).fillCircle(22, 22, 11);
+    g.fillStyle(0xf4f7ff).fillCircle(19, 18, 4);
+    g.lineStyle(3, 0x7cff6b).strokeCircle(22, 22, 18);
+    g.generateTexture('stageOneBossCore', 44, 44);
     // 戦車：履帯と円形砲塔
     g.clear();
     g.fillStyle(0x5a3b08).fillRect(2, 8, 8, 34).fillRect(34, 8, 8, 34);
@@ -531,8 +551,42 @@ export class GameScene extends Phaser.Scene {
       );
     else e.setVelocity(0, definition.movementPath.velocityY * archetype.speedMultiplier);
   }
+  private isBossPart(enemy: Enemy) {
+    return Boolean(enemy.bossPart && this.bossEncounter);
+  }
+  private updateBossParts() {
+    if (!this.boss || !this.bossEncounter) return;
+    const cycle = this.stageDef.boss.movementCycle;
+    if (this.bossEncounter.motionMode === 'move') {
+      const t = this.bossEncounter.motionElapsedMs / cycle.periodMs;
+      this.bossAnchor = {
+        x: 270 + Math.sin(t * Math.PI * 2) * cycle.horizontalAmplitude,
+        y: 120 + Math.sin(t * Math.PI * 4) * cycle.verticalAmplitude,
+      };
+    }
+    Object.values(this.bossParts).forEach((part) => {
+      if (!part?.active) return;
+      part.setPosition(
+        this.bossAnchor.x + (part.bossOffsetX ?? 0),
+        this.bossAnchor.y + (part.bossOffsetY ?? 0),
+      );
+      part.setVelocity(0, 0);
+    });
+  }
   private updateEnemy(e: Enemy) {
     if (!e.active) return;
+    if (this.isBossPart(e)) {
+      if (e.bossPart === 'core' && !this.bossEncounter!.coreExposed) return;
+      const bossPhase = currentBossPhase(this.stageDef.boss, this.bossEncounter!);
+      const stopMultiplier = this.bossEncounter!.motionMode === 'barrage-stop' ? 0.52 : 1;
+      const bulletInterval =
+        this.stageDef.boss.bulletInterval * bossPhase.bulletIntervalMultiplier * stopMultiplier;
+      if (this.time.now - e.lastShot > bulletInterval) {
+        e.lastShot = this.time.now;
+        this.fireEnemyAttack(e);
+      }
+      return;
+    }
     if (e.movementPath?.kind === 'sine') {
       const age = this.time.now - e.spawnedAt;
       e.setX(
@@ -548,13 +602,8 @@ export class GameScene extends Phaser.Scene {
       e.disableBody(true, true);
       return;
     }
-    const bossPhase =
-      e === this.boss && this.bossEncounter
-        ? currentBossPhase(this.stageDef.boss, this.bossEncounter)
-        : undefined;
-    const bulletInterval = bossPhase
-      ? this.stageDef.boss.bulletInterval * bossPhase.bulletIntervalMultiplier
-      : e.targetClass === 'air'
+    const bulletInterval =
+      e.targetClass === 'air'
         ? this.stageDef.airBulletInterval * enemyArchetypes[e.archetypeId].attackCooldownMultiplier
         : this.stageDef.groundBulletInterval *
           enemyArchetypes[e.archetypeId].attackCooldownMultiplier;
@@ -565,13 +614,14 @@ export class GameScene extends Phaser.Scene {
   }
   private fireEnemyAttack(enemy: Enemy) {
     const archetype = enemyArchetypes[enemy.archetypeId];
-    const bossPhase =
-      enemy === this.boss && this.bossEncounter
-        ? currentBossPhase(this.stageDef.boss, this.bossEncounter)
-        : undefined;
+    const bossPhase = this.isBossPart(enemy)
+      ? currentBossPhase(this.stageDef.boss, this.bossEncounter!)
+      : undefined;
     const pattern: BulletPatternId =
       bossPhase && this.bossEncounter
-        ? nextBossPattern(this.stageDef.boss, this.bossEncounter)
+        ? this.bossEncounter.motionMode === 'barrage-stop' && enemy.bossPart !== 'core'
+          ? 'radial-8'
+          : nextBossPattern(this.stageDef.boss, this.bossEncounter)
         : archetype.attackPattern;
     const target = { x: this.player.x, y: this.player.y };
     const speed = scaledEnemyBulletSpeed(
@@ -623,13 +673,22 @@ export class GameScene extends Phaser.Scene {
     enemy.setTintFill(0xffffff);
     playEnemyHit();
     this.time.delayedCall(50, () => enemy.active && enemy.clearTint());
-    if (enemy === this.boss && this.bossEncounter) {
-      const status = damageBoss(this.bossEncounter, 1);
-      enemy.hp = this.bossEncounter.hp;
-      if (status === 'defeated') {
+    if (enemy.bossPart && this.bossEncounter) {
+      const result = damageBossPart(this.bossEncounter, enemy.bossPart, 1);
+      enemy.hp = this.bossEncounter.parts[enemy.bossPart].hp;
+      if (result.partDestroyed) {
+        this.createDestructionEffect(
+          enemy.x,
+          enemy.y,
+          'air',
+          enemy.bossPart === 'core' ? 'boss' : 'midboss',
+        );
+        enemy.disableBody(true, true);
+      }
+      if (result.coreExposed) this.exposeBossCore();
+      if (result.status === 'defeated') {
         const score = this.awardDefeat('air', this.stageDef.boss.score);
         this.showScorePopup(enemy.x, enemy.y, score);
-        this.createDestructionEffect(enemy.x, enemy.y, 'air', 'boss');
         this.finishBoss(true);
       }
       return;
@@ -700,6 +759,53 @@ export class GameScene extends Phaser.Scene {
       this.showCombatNotice(`CHAIN x${this.session.combat.scoreMultiplier}`, 0x7cff6b);
     return reward.score;
   }
+  private spawnBossPart(partId: BossPartId, texture: string, scale: number) {
+    const partDef = this.stageDef.boss.parts[partId];
+    const e = this.enemies.get(
+      this.bossAnchor.x + partDef.offsetX,
+      this.bossAnchor.y + partDef.offsetY,
+      texture,
+    ) as Enemy;
+    if (!e) return undefined;
+    e.enableBody(
+      true,
+      this.bossAnchor.x + partDef.offsetX,
+      this.bossAnchor.y + partDef.offsetY,
+      true,
+      true,
+    )
+      .setTexture(texture)
+      .setScale(scale)
+      .setImmovable(false)
+      .setVelocity(0, 0)
+      .setAlpha(partId === 'core' ? 0.65 : 1)
+      .clearTint();
+    e.targetClass = 'air';
+    e.archetypeId = 'air-gunship';
+    e.hp = partDef.hp;
+    e.points = 0;
+    e.lastShot = this.time.now;
+    e.movementPath = { kind: 'linear', velocityX: 0, velocityY: 0 };
+    e.pathOriginX = e.x;
+    e.spawnedAt = this.time.now;
+    e.attackSequence = (e.attackSequence ?? 0) + 1;
+    e.isMidboss = false;
+    e.bossPart = partId;
+    e.bossOffsetX = partDef.offsetX;
+    e.bossOffsetY = partDef.offsetY;
+    const body = e.body as Phaser.Physics.Arcade.Body;
+    body.setSize(partId === 'core' ? 24 : 34, partId === 'core' ? 28 : 24);
+    return e;
+  }
+  private exposeBossCore() {
+    const core = this.bossParts.core;
+    if (!core?.active) return;
+    core.setTexture('stageOneBossCore').setAlpha(1).setTint(0x48d7ff);
+    this.cameras.main.flash(180, 72, 215, 255, false);
+    this.createEffectBurst(core.x, core.y, 0x48d7ff, 22, 120);
+    this.showCombatNotice('CORE EXPOSED', 0x48d7ff);
+    this.time.delayedCall(220, () => core.active && core.clearTint());
+  }
   private spawnBoss() {
     this.bossWarning?.destroy();
     this.bossWarning = undefined;
@@ -707,31 +813,32 @@ export class GameScene extends Phaser.Scene {
     this.enemyBullets.clear(true, true);
     this.groundLocks = [];
     this.lockOnDisplay.clear();
-    const texture = this.session.currentStage === 1 ? 'stageOneBoss' : 'airGunship';
-    const e = this.enemies.get(270, 120, texture) as Enemy;
-    e.enableBody(true, 270, 120, true, true)
-      .setTexture(texture)
-      .setScale(2.8)
-      .setImmovable(false)
-      .setVelocity(0, 0)
-      .setAlpha(1)
-      .clearTint();
-    e.targetClass = 'air';
-    e.archetypeId = 'air-gunship';
-    e.hp = this.stageDef.boss.hp;
-    e.points = 0;
-    e.lastShot = this.time.now;
-    e.movementPath = { kind: 'sine', velocityY: 0, amplitude: 145, periodMs: 3200 };
-    e.pathOriginX = e.x;
-    e.spawnedAt = this.time.now;
-    e.attackSequence = (e.attackSequence ?? 0) + 1;
-    e.isMidboss = false;
-    this.boss = e;
+    this.bossAnchor = { x: 270, y: 120 };
+    this.bossParts = {
+      core: this.spawnBossPart(
+        'core',
+        this.session.currentStage === 1 ? 'stageOneBoss' : 'airGunship',
+        2.8,
+      ),
+      'left-arm': this.spawnBossPart(
+        'left-arm',
+        this.session.currentStage === 1 ? 'stageOneBossArm' : 'airGunship',
+        2,
+      ),
+      'right-arm': this.spawnBossPart(
+        'right-arm',
+        this.session.currentStage === 1 ? 'stageOneBossArm' : 'airGunship',
+        2,
+      ),
+    };
+    if (this.bossParts['right-arm']) this.bossParts['right-arm'].setFlipX(true);
+    this.boss = this.bossParts.core;
+    if (!this.boss) return;
     this.bossEncounter = beginBossEncounter(this.stageDef.boss);
     this.bossPhaseId = this.stageDef.boss.phases[0]!.id;
     startBgm('boss');
     this.cameras.main.shake(350, 0.006);
-    this.createEffectBurst(e.x, e.y, 0x48d7ff, 20, 140);
+    this.createEffectBurst(this.boss.x, this.boss.y, 0x48d7ff, 20, 140);
     this.session.bossState = 'active';
     this.bossHud.setVisible(true);
     this.session.checkpointProgress = this.stageDef.duration;
@@ -739,8 +846,9 @@ export class GameScene extends Phaser.Scene {
   }
   private finishBoss(defeated: boolean) {
     if (!this.boss) return;
-    this.boss.disableBody(true, true);
+    Object.values(this.bossParts).forEach((part) => part?.disableBody(true, true));
     this.boss = undefined;
+    this.bossParts = {};
     this.bossEncounter = undefined;
     this.bossPhaseId = undefined;
     this.bossHud.setVisible(false);
@@ -775,6 +883,7 @@ export class GameScene extends Phaser.Scene {
       this.bossWarning?.destroy();
       this.bossWarning = undefined;
       this.boss = undefined;
+      this.bossParts = {};
       this.bossEncounter = undefined;
       this.bossPhaseId = undefined;
       this.bossHud.setVisible(false);
